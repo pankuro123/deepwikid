@@ -59,6 +59,7 @@ class ChatCompletionRequest(BaseModel):
     excluded_files: Optional[str] = Field(None, description="Comma-separated list of file patterns to exclude from processing")
     included_dirs: Optional[str] = Field(None, description="Comma-separated list of directories to include exclusively")
     included_files: Optional[str] = Field(None, description="Comma-separated list of file patterns to include exclusively")
+    wikiContext: Optional[str] = Field(None, description="Context from generated wiki pages")
 
 async def handle_websocket_chat(websocket: WebSocket):
     """
@@ -434,6 +435,10 @@ This file contains...
             # Add a note that we're skipping RAG due to size constraints or because it's the isolated API
             logger.info("No context available from RAG")
             prompt += "<note>Answering without retrieval augmentation.</note>\n\n"
+
+        # Add wiki context if available
+        if request.wikiContext:
+            prompt += f"<wiki_content>\n{request.wikiContext}\n</wiki_content>\n\n"
 
         prompt += f"<query>\n{query}\n</query>\n\nAssistant: "
 

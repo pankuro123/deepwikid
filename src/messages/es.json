@@ -81,7 +81,12 @@
     "hideDefault": "Ocultar Predeterminados",
     "viewDefault": "Ver Predeterminados",
     "authorizationCode": "Código de Autorización",
-    "authorizationRequired": "Generar Wiki requiere código de autorización"
+    "authorizationRequired": "Generar Wiki requiere código de autorización",
+    "reportType": "Report Type",
+    "technical": "Technical",
+    "functional": "Functional (FEX)",
+    "technicalDescription": "Standard technical documentation",
+    "functionalDescription": "Business analyst requirement document"
   },
   "footer": {
     "copyright": "DeepWiki - Documentación impulsada por IA para repositorios de código"

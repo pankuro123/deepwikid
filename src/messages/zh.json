@@ -81,7 +81,12 @@
     "hideDefault": "隐藏默认配置",
     "viewDefault": "查看默认配置",
     "authorizationCode": "授权码",
-    "authorizationRequired": "生成wiki页面需要填写授权码"
+    "authorizationRequired": "生成wiki页面需要填写授权码",
+    "reportType": "Report Type",
+    "technical": "Technical",
+    "functional": "Functional (FEX)",
+    "technicalDescription": "Standard technical documentation",
+    "functionalDescription": "Business analyst requirement document"
   },
   "footer": {
     "copyright": "DeepWiki - 为代码仓库提供AI驱动的文档"

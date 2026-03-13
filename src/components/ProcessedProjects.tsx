@@ -11,6 +11,7 @@ interface ProcessedProject {
   repo: string;
   name: string;
   repo_type: string;
+  report_type: string;
   submittedAt: number;
   language: string;
 }
@@ -22,11 +23,11 @@ interface ProcessedProjectsProps {
   messages?: Record<string, Record<string, string>>; // Translation messages with proper typing
 }
 
-export default function ProcessedProjects({ 
-  showHeader = true, 
-  maxItems, 
+export default function ProcessedProjects({
+  showHeader = true,
+  maxItems,
   className = "",
-  messages 
+  messages
 }: ProcessedProjectsProps) {
   const [projects, setProjects] = useState<ProcessedProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,7 +88,7 @@ export default function ProcessedProjects({
     }
 
     const query = searchQuery.toLowerCase();
-    const filtered = projects.filter(project => 
+    const filtered = projects.filter(project =>
       project.name.toLowerCase().includes(query) ||
       project.owner.toLowerCase().includes(query) ||
       project.repo.toLowerCase().includes(query) ||
@@ -114,6 +115,7 @@ export default function ProcessedProjects({
           repo: project.repo,
           repo_type: project.repo_type,
           language: project.language,
+          report_type: project.report_type,
         }),
       });
       if (!response.ok) {
@@ -165,22 +167,20 @@ export default function ProcessedProjects({
         <div className="flex items-center bg-[var(--background)] border border-[var(--border-color)] rounded-lg p-1">
           <button
             onClick={() => setViewMode('card')}
-            className={`p-2 rounded transition-colors ${
-              viewMode === 'card'
-                ? 'bg-[var(--accent-primary)] text-white'
-                : 'text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--card-bg)]'
-            }`}
+            className={`p-2 rounded transition-colors ${viewMode === 'card'
+              ? 'bg-[var(--accent-primary)] text-white'
+              : 'text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--card-bg)]'
+              }`}
             title="Card View"
           >
             <FaTh className="h-4 w-4" />
           </button>
           <button
             onClick={() => setViewMode('list')}
-            className={`p-2 rounded transition-colors ${
-              viewMode === 'list'
-                ? 'bg-[var(--accent-primary)] text-white'
-                : 'text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--card-bg)]'
-            }`}
+            className={`p-2 rounded transition-colors ${viewMode === 'list'
+              ? 'bg-[var(--accent-primary)] text-white'
+              : 'text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--card-bg)]'
+              }`}
             title="List View"
           >
             <FaList className="h-4 w-4" />
@@ -193,7 +193,7 @@ export default function ProcessedProjects({
 
       {!isLoading && !error && filteredProjects.length > 0 && (
         <div className={viewMode === 'card' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2'}>
-            {filteredProjects.map((project) => (
+          {filteredProjects.map((project) => (
             viewMode === 'card' ? (
               <div key={project.id} className="relative p-4 border border-[var(--border-color)] rounded-lg bg-[var(--card-bg)] shadow-sm hover:shadow-md transition-all duration-200 hover:scale-[1.02]">
                 <button
@@ -205,7 +205,7 @@ export default function ProcessedProjects({
                   <FaTimes className="h-4 w-4" />
                 </button>
                 <Link
-                  href={`/${project.owner}/${project.repo}?type=${project.repo_type}&language=${project.language}`}
+                  href={`/${project.owner}/${project.repo}?type=${project.repo_type}&language=${project.language}&report_type=${project.report_type}`}
                   className="block"
                 >
                   <h3 className="text-lg font-semibold text-[var(--link-color)] hover:underline mb-2 line-clamp-2">
@@ -214,6 +214,9 @@ export default function ProcessedProjects({
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="px-2 py-1 text-xs bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] rounded-full border border-[var(--accent-primary)]/20">
                       {project.repo_type}
+                    </span>
+                    <span className="px-2 py-1 text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full border border-purple-500/20 capitalize">
+                      {project.report_type}
                     </span>
                     <span className="px-2 py-1 text-xs bg-[var(--background)] text-[var(--muted)] rounded-full border border-[var(--border-color)]">
                       {project.language}
@@ -235,7 +238,7 @@ export default function ProcessedProjects({
                   <FaTimes className="h-4 w-4" />
                 </button>
                 <Link
-                  href={`/${project.owner}/${project.repo}?type=${project.repo_type}&language=${project.language}`}
+                  href={`/${project.owner}/${project.repo}?type=${project.repo_type}&language=${project.language}&report_type=${project.report_type}`}
                   className="flex items-center justify-between"
                 >
                   <div className="flex-1 min-w-0">
@@ -243,12 +246,15 @@ export default function ProcessedProjects({
                       {project.name}
                     </h3>
                     <p className="text-xs text-[var(--muted)] mt-1">
-                      {t('processedOn')} {new Date(project.submittedAt).toLocaleDateString()} • {project.repo_type} • {project.language}
+                      {t('processedOn')} {new Date(project.submittedAt).toLocaleDateString()} • {project.repo_type} • {project.language} • <span className="capitalize">{project.report_type}</span>
                     </p>
                   </div>
                   <div className="flex gap-2 ml-4">
                     <span className="px-2 py-1 text-xs bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] rounded border border-[var(--accent-primary)]/20">
                       {project.repo_type}
+                    </span>
+                    <span className="px-2 py-1 text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded border border-purple-500/20 capitalize">
+                      {project.report_type}
                     </span>
                   </div>
                 </Link>

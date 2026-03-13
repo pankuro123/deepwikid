@@ -21,6 +21,57 @@ from api.tools.embedder import get_embedder
 # Configure logging
 logger = logging.getLogger(__name__)
 
+
+def _get_ssl_verify():
+    """
+    Determine the SSL verification setting for requests calls.
+    Supports corporate environments with custom CA certificates.
+
+    Environment variables (checked in order):
+        - SSL_CERT_FILE: Path to a custom CA bundle (.pem file)
+        - REQUESTS_CA_BUNDLE: Standard Python env var for CA bundle
+        - GIT_SSL_NO_VERIFY: If 'true', disables SSL verification entirely
+
+    Returns:
+        str or bool: Path to CA bundle, or True/False for verify parameter
+    """
+    # Check for custom CA bundle path
+    ca_bundle = os.environ.get('SSL_CERT_FILE') or os.environ.get('REQUESTS_CA_BUNDLE')
+    if ca_bundle and os.path.isfile(ca_bundle):
+        logger.info(f"Using custom CA bundle for SSL: {ca_bundle}")
+        return ca_bundle
+
+    # Check if SSL verification should be disabled
+    if os.environ.get('GIT_SSL_NO_VERIFY', '').lower() in ('true', '1', 'yes'):
+        logger.warning("SSL verification is DISABLED (GIT_SSL_NO_VERIFY=true)")
+        return False
+
+    # Default: use system CA bundle
+    return True
+
+
+def _get_git_ssl_env():
+    """
+    Build environment variables for git subprocess calls with SSL support.
+
+    Returns:
+        dict: Environment variables to pass to subprocess
+    """
+    env = os.environ.copy()
+
+    # If GIT_SSL_NO_VERIFY is set, pass it through to git
+    if os.environ.get('GIT_SSL_NO_VERIFY', '').lower() in ('true', '1', 'yes'):
+        env['GIT_SSL_NO_VERIFY'] = 'true'
+        logger.warning("Git SSL verification is DISABLED")
+
+    # If a custom CA bundle is set, configure git to use it
+    ca_bundle = os.environ.get('SSL_CERT_FILE') or os.environ.get('REQUESTS_CA_BUNDLE')
+    if ca_bundle and os.path.isfile(ca_bundle):
+        env['GIT_SSL_CAINFO'] = ca_bundle
+        logger.info(f"Git using custom CA bundle: {ca_bundle}")
+
+    return env
+
 # Maximum token limit for OpenAI embedding models
 MAX_EMBEDDING_TOKENS = 8192
 
@@ -116,19 +167,28 @@ def download_repo(repo_url: str, local_path: str, repo_type: str = None, access_
                 # Format: https://oauth2:{token}@gitlab.com/owner/repo.git
                 clone_url = urlunparse((parsed.scheme, f"oauth2:{encoded_token}@{parsed.netloc}", parsed.path, '', '', ''))
             elif repo_type == "bitbucket":
-                # Format: https://x-token-auth:{token}@bitbucket.org/owner/repo.git
-                clone_url = urlunparse((parsed.scheme, f"x-token-auth:{encoded_token}@{parsed.netloc}", parsed.path, '', '', ''))
+                is_cloud = 'bitbucket.org' in parsed.netloc.lower()
+                if is_cloud:
+                    # Bitbucket Cloud: https://x-token-auth:{token}@bitbucket.org/owner/repo.git
+                    clone_url = urlunparse((parsed.scheme, f"x-token-auth:{encoded_token}@{parsed.netloc}", parsed.path, '', '', ''))
+                else:
+                    # Bitbucket Server/Data Center: HTTP access tokens are used as password
+                    # Format: https://x-token-auth:{token}@bitbucket.example.com/scm/project/repo.git
+                    clone_url = urlunparse((parsed.scheme, f"x-token-auth:{encoded_token}@{parsed.netloc}", parsed.path, '', '', ''))
 
             logger.info("Using access token for authentication")
 
         # Clone the repository
         logger.info(f"Cloning repository from {repo_url} to {local_path}")
         # We use repo_url in the log to avoid exposing the token in logs
+        # Use custom SSL environment for corporate environments
+        git_env = _get_git_ssl_env()
         result = subprocess.run(
             ["git", "clone", "--depth=1", "--single-branch", clone_url, local_path],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=git_env,
         )
 
         logger.info("Repository cloned successfully")
@@ -498,7 +558,7 @@ def get_github_file_content(repo_url: str, file_path: str, access_token: str = N
             headers["Authorization"] = f"token {access_token}"
         logger.info(f"Fetching file content from GitHub API: {api_url}")
         try:
-            response = requests.get(api_url, headers=headers)
+            response = requests.get(api_url, headers=headers, verify=_get_ssl_verify())
             response.raise_for_status()
         except RequestException as e:
             raise ValueError(f"Error fetching file content: {e}")
@@ -569,7 +629,7 @@ def get_gitlab_file_content(repo_url: str, file_path: str, access_token: str = N
             if access_token:
                 project_headers["PRIVATE-TOKEN"] = access_token
             
-            project_response = requests.get(project_info_url, headers=project_headers)
+            project_response = requests.get(project_info_url, headers=project_headers, verify=_get_ssl_verify())
             if project_response.status_code == 200:
                 project_data = project_response.json()
                 default_branch = project_data.get('default_branch', 'main')
@@ -588,7 +648,7 @@ def get_gitlab_file_content(repo_url: str, file_path: str, access_token: str = N
             headers["PRIVATE-TOKEN"] = access_token
         logger.info(f"Fetching file content from GitLab API: {api_url}")
         try:
-            response = requests.get(api_url, headers=headers)
+            response = requests.get(api_url, headers=headers, verify=_get_ssl_verify())
             response.raise_for_status()
             content = response.text
         except RequestException as e:
@@ -611,9 +671,15 @@ def get_gitlab_file_content(repo_url: str, file_path: str, access_token: str = N
 def get_bitbucket_file_content(repo_url: str, file_path: str, access_token: str = None) -> str:
     """
     Retrieves the content of a file from a Bitbucket repository using the Bitbucket API.
+    Supports both Bitbucket Cloud (bitbucket.org) and Bitbucket Server/Data Center (self-hosted).
+
+    Bitbucket Server URLs typically look like:
+        https://bitbucket.example.com/scm/{project}/{repo}.git
+    Bitbucket Cloud URLs typically look like:
+        https://bitbucket.org/{owner}/{repo}
 
     Args:
-        repo_url (str): The URL of the Bitbucket repository (e.g., "https://bitbucket.org/username/repo")
+        repo_url (str): The URL of the Bitbucket repository
         file_path (str): The path to the file within the repository (e.g., "src/main.py")
         access_token (str, optional): Bitbucket personal access token for private repositories
 
@@ -621,48 +687,116 @@ def get_bitbucket_file_content(repo_url: str, file_path: str, access_token: str 
         str: The content of the file as a string
     """
     try:
-        # Extract owner and repo name from Bitbucket URL
-        if not (repo_url.startswith("https://bitbucket.org/") or repo_url.startswith("http://bitbucket.org/")):
+        parsed_url = urlparse(repo_url)
+        if not parsed_url.scheme or not parsed_url.netloc:
             raise ValueError("Not a valid Bitbucket repository URL")
 
-        parts = repo_url.rstrip('/').split('/')
-        if len(parts) < 5:
-            raise ValueError("Invalid Bitbucket URL format")
+        ssl_verify = _get_ssl_verify()
 
-        owner = parts[-2]
-        repo = parts[-1].replace(".git", "")
+        hostname = parsed_url.netloc.lower()
+        path_parts = parsed_url.path.strip('/').split('/')
 
-        # Try to get the default branch from the repository info
-        default_branch = None
-        try:
-            repo_info_url = f"https://api.bitbucket.org/2.0/repositories/{owner}/{repo}"
-            repo_headers = {}
-            if access_token:
-                repo_headers["Authorization"] = f"Bearer {access_token}"
-            
-            repo_response = requests.get(repo_info_url, headers=repo_headers)
-            if repo_response.status_code == 200:
-                repo_data = repo_response.json()
-                default_branch = repo_data.get('mainbranch', {}).get('name', 'main')
-                logger.info(f"Found default branch: {default_branch}")
-            else:
-                logger.warning(f"Could not fetch repository info, using 'main' as default branch")
+        # Determine if this is Bitbucket Cloud or Bitbucket Server/Data Center
+        is_bitbucket_cloud = 'bitbucket.org' in hostname
+
+        if is_bitbucket_cloud:
+            # ---- Bitbucket Cloud ----
+            if len(path_parts) < 2:
+                raise ValueError("Invalid Bitbucket Cloud URL format")
+
+            owner = path_parts[-2]
+            repo = path_parts[-1].replace(".git", "")
+
+            # Try to get the default branch from the repository info
+            default_branch = None
+            try:
+                repo_info_url = f"https://api.bitbucket.org/2.0/repositories/{owner}/{repo}"
+                repo_headers = {}
+                if access_token:
+                    repo_headers["Authorization"] = f"Bearer {access_token}"
+
+                repo_response = requests.get(repo_info_url, headers=repo_headers, verify=ssl_verify)
+                if repo_response.status_code == 200:
+                    repo_data = repo_response.json()
+                    default_branch = repo_data.get('mainbranch', {}).get('name', 'main')
+                    logger.info(f"Found default branch: {default_branch}")
+                else:
+                    logger.warning("Could not fetch repository info, using 'main' as default branch")
+                    default_branch = 'main'
+            except Exception as e:
+                logger.warning(f"Error fetching repository info: {e}, using 'main' as default branch")
                 default_branch = 'main'
-        except Exception as e:
-            logger.warning(f"Error fetching repository info: {e}, using 'main' as default branch")
-            default_branch = 'main'
 
-        # Use Bitbucket API to get file content
-        # The API endpoint for getting file content is: /2.0/repositories/{owner}/{repo}/src/{branch}/{path}
-        api_url = f"https://api.bitbucket.org/2.0/repositories/{owner}/{repo}/src/{default_branch}/{file_path}"
+            api_url = f"https://api.bitbucket.org/2.0/repositories/{owner}/{repo}/src/{default_branch}/{file_path}"
+            headers = {}
+            if access_token:
+                headers["Authorization"] = f"Bearer {access_token}"
 
-        # Fetch file content from Bitbucket API
-        headers = {}
-        if access_token:
-            headers["Authorization"] = f"Bearer {access_token}"
+        else:
+            # ---- Bitbucket Server / Data Center ----
+            # URL format: https://bitbucket.example.com/scm/{project}/{repo}.git
+            # REST API 1.0: /rest/api/1.0/projects/{project}/repos/{repo}/raw/{path}?at={branch}
+            bitbucket_base = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+            # Extract project and repo from the path
+            # path_parts could be: ['scm', 'corix', 'comet-batch-comet.git']
+            # or without /scm/: ['projects', 'corix', 'repos', 'comet-batch-comet']
+            if 'scm' in path_parts:
+                scm_idx = path_parts.index('scm')
+                if len(path_parts) < scm_idx + 3:
+                    raise ValueError("Invalid Bitbucket Server URL format — expected /scm/{project}/{repo}")
+                project = path_parts[scm_idx + 1]
+                repo = path_parts[scm_idx + 2].replace(".git", "")
+            else:
+                # Fallback: take last two segments
+                if len(path_parts) < 2:
+                    raise ValueError("Invalid Bitbucket Server URL format")
+                project = path_parts[-2]
+                repo = path_parts[-1].replace(".git", "")
+
+            # Try to get the default branch from the repository info
+            default_branch = None
+            try:
+                repo_info_url = f"{bitbucket_base}/rest/api/1.0/projects/{project}/repos/{repo}"
+                repo_headers = {}
+                if access_token:
+                    repo_headers["Authorization"] = f"Bearer {access_token}"
+
+                repo_response = requests.get(repo_info_url, headers=repo_headers, verify=ssl_verify)
+                if repo_response.status_code == 200:
+                    repo_data = repo_response.json()
+                    # Bitbucket Server stores default branch in 'defaultBranch' or via branches API
+                    default_branch = None
+                    if 'defaultBranch' in repo_data:
+                        default_branch = repo_data['defaultBranch']
+                    # Try the default branch endpoint
+                    if not default_branch:
+                        branch_url = f"{bitbucket_base}/rest/api/1.0/projects/{project}/repos/{repo}/default-branch"
+                        branch_response = requests.get(branch_url, headers=repo_headers, verify=ssl_verify)
+                        if branch_response.status_code == 200:
+                            branch_data = branch_response.json()
+                            default_branch = branch_data.get('displayId', branch_data.get('id', 'master'))
+                    if not default_branch:
+                        default_branch = 'master'  # Bitbucket Server often defaults to 'master'
+                    logger.info(f"Found default branch: {default_branch}")
+                else:
+                    logger.warning("Could not fetch repository info, using 'master' as default branch")
+                    default_branch = 'master'
+            except Exception as e:
+                logger.warning(f"Error fetching repository info: {e}, using 'master' as default branch")
+                default_branch = 'master'
+
+            # Bitbucket Server raw file endpoint
+            encoded_file_path = quote(file_path, safe='/')
+            api_url = f"{bitbucket_base}/rest/api/1.0/projects/{project}/repos/{repo}/raw/{encoded_file_path}?at={default_branch}"
+            headers = {}
+            if access_token:
+                headers["Authorization"] = f"Bearer {access_token}"
+
+        # Fetch file content
         logger.info(f"Fetching file content from Bitbucket API: {api_url}")
         try:
-            response = requests.get(api_url, headers=headers)
+            response = requests.get(api_url, headers=headers, verify=ssl_verify)
             if response.status_code == 200:
                 content = response.text
             elif response.status_code == 404:
@@ -763,13 +897,23 @@ class DatabaseManager:
         # Extract owner and repo name to create unique identifier
         url_parts = repo_url_or_path.rstrip('/').split('/')
 
-        if repo_type in ["github", "gitlab", "bitbucket"] and len(url_parts) >= 5:
-            # GitHub URL format: https://github.com/owner/repo
-            # GitLab URL format: https://gitlab.com/owner/repo or https://gitlab.com/group/subgroup/repo
-            # Bitbucket URL format: https://bitbucket.org/owner/repo
-            owner = url_parts[-2]
-            repo = url_parts[-1].replace(".git", "")
-            repo_name = f"{owner}_{repo}"
+        if repo_type in ["github", "gitlab", "bitbucket"]:
+            # Handle Bitbucket Server URLs with /scm/ path prefix
+            # e.g., https://bitbucket.cib.echonet/scm/corix/comet-batch-comet.git
+            if repo_type == "bitbucket" and '/scm/' in repo_url_or_path:
+                scm_idx = url_parts.index('scm')
+                if len(url_parts) > scm_idx + 2:
+                    owner = url_parts[scm_idx + 1]
+                    repo = url_parts[scm_idx + 2].replace(".git", "")
+                    return f"{owner}_{repo}"
+
+            # Standard URL format: last two parts are owner/repo
+            if len(url_parts) >= 2:
+                owner = url_parts[-2]
+                repo = url_parts[-1].replace(".git", "")
+                repo_name = f"{owner}_{repo}"
+            else:
+                repo_name = url_parts[-1].replace(".git", "")
         else:
             repo_name = url_parts[-1].replace(".git", "")
         return repo_name

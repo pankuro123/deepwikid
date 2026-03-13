@@ -21,6 +21,10 @@ interface ConfigurationModalProps {
   isComprehensiveView: boolean;
   setIsComprehensiveView: (value: boolean) => void;
 
+  // Report type options
+  reportType: 'technical' | 'functional';
+  setReportType: (value: 'technical' | 'functional') => void;
+
   // Model selection
   provider: string;
   setProvider: (value: string) => void;
@@ -69,6 +73,8 @@ export default function ConfigurationModal({
   supportedLanguages,
   isComprehensiveView,
   setIsComprehensiveView,
+  reportType,
+  setReportType,
   provider,
   setProvider,
   model,
@@ -147,7 +153,7 @@ export default function ConfigurationModal({
                 className="input-japanese block w-full px-3 py-2 text-sm rounded-md bg-transparent text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-primary)]"
               >
                 {
-                  Object.entries(supportedLanguages).map(([key, value])=> <option key={key} value={key}>{value}</option>)
+                  Object.entries(supportedLanguages).map(([key, value]) => <option key={key} value={key}>{value}</option>)
                 }
               </select>
             </div>
@@ -161,11 +167,10 @@ export default function ConfigurationModal({
                 <button
                   type="button"
                   onClick={() => setIsComprehensiveView(true)}
-                  className={`flex-1 flex items-center justify-between p-2 rounded-md border transition-colors ${
-                    isComprehensiveView
-                      ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]'
-                      : 'bg-[var(--background)]/50 border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--background)]'
-                  }`}
+                  className={`flex-1 flex items-center justify-between p-2 rounded-md border transition-colors ${isComprehensiveView
+                    ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]'
+                    : 'bg-[var(--background)]/50 border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--background)]'
+                    }`}
                 >
                   <div className="flex items-center">
                     <div className="text-left">
@@ -185,11 +190,10 @@ export default function ConfigurationModal({
                 <button
                   type="button"
                   onClick={() => setIsComprehensiveView(false)}
-                  className={`flex-1 flex items-center justify-between p-2 rounded-md border transition-colors ${
-                    !isComprehensiveView
-                      ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]'
-                      : 'bg-[var(--background)]/50 border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--background)]'
-                  }`}
+                  className={`flex-1 flex items-center justify-between p-2 rounded-md border transition-colors ${!isComprehensiveView
+                    ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]'
+                    : 'bg-[var(--background)]/50 border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--background)]'
+                    }`}
                 >
                   <div className="flex items-center">
                     <div className="text-left">
@@ -200,6 +204,60 @@ export default function ConfigurationModal({
                     </div>
                   </div>
                   {!isComprehensiveView && (
+                    <div className="ml-2 h-4 w-4 rounded-full bg-[var(--accent-primary)]/20 flex items-center justify-center">
+                      <div className="h-2 w-2 rounded-full bg-[var(--accent-primary)]"></div>
+                    </div>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Report Type Selector */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                {t.form?.reportType || 'Report Type'}
+              </label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReportType('technical')}
+                  className={`flex-1 flex items-center justify-between p-2 rounded-md border transition-colors ${reportType === 'technical'
+                    ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]'
+                    : 'bg-[var(--background)]/50 border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--background)]'
+                    }`}
+                >
+                  <div className="flex items-center">
+                    <div className="text-left">
+                      <div className="font-medium text-sm">{t.form?.technical || 'Technical'}</div>
+                      <div className="text-xs opacity-80">
+                        {t.form?.technicalDescription || 'Standard technical documentation'}
+                      </div>
+                    </div>
+                  </div>
+                  {reportType === 'technical' && (
+                    <div className="ml-2 h-4 w-4 rounded-full bg-[var(--accent-primary)]/20 flex items-center justify-center">
+                      <div className="h-2 w-2 rounded-full bg-[var(--accent-primary)]"></div>
+                    </div>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReportType('functional')}
+                  className={`flex-1 flex items-center justify-between p-2 rounded-md border transition-colors ${reportType === 'functional'
+                    ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]'
+                    : 'bg-[var(--background)]/50 border-[var(--border-color)] text-[var(--foreground)] hover:bg-[var(--background)]'
+                    }`}
+                >
+                  <div className="flex items-center">
+                    <div className="text-left">
+                      <div className="font-medium text-sm">{t.form?.functional || 'Functional (FEX)'}</div>
+                      <div className="text-xs opacity-80">
+                        {t.form?.functionalDescription || 'Business analyst requirement document'}
+                      </div>
+                    </div>
+                  </div>
+                  {reportType === 'functional' && (
                     <div className="ml-2 h-4 w-4 rounded-full bg-[var(--accent-primary)]/20 flex items-center justify-center">
                       <div className="h-2 w-2 rounded-full bg-[var(--accent-primary)]"></div>
                     </div>
@@ -261,13 +319,13 @@ export default function ConfigurationModal({
                   className="input-japanese block w-full px-3 py-2 text-sm rounded-md bg-transparent text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-primary)]"
                   placeholder="Enter your authorization code"
                 />
-                 <div className="flex items-center mt-2 text-xs text-[var(--muted)]">
+                <div className="flex items-center mt-2 text-xs text-[var(--muted)]">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-[var(--muted)]"
                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                   {t.form?.authorizationRequired || 'Authentication is required to generate the wiki.'}
+                  {t.form?.authorizationRequired || 'Authentication is required to generate the wiki.'}
                 </div>
               </div>
             )}

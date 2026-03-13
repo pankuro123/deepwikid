@@ -1,6 +1,9 @@
 import os
 import logging
-from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
+import zipfile
+import uuid
+import shutil
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from typing import List, Optional, Dict, Any, Literal
@@ -54,6 +57,7 @@ class ProcessedProjectEntry(BaseModel):
     repo: str
     name: str  # owner/repo
     repo_type: str # Renamed from type to repo_type for clarity with existing models
+    report_type: str = "functional" # defaults to functional for backward compatibility
     submittedAt: int # Timestamp
     language: str # Extracted from filename
 
@@ -97,6 +101,7 @@ class WikiCacheData(BaseModel):
     repo: Optional[RepoInfo] = None
     provider: Optional[str] = None
     model: Optional[str] = None
+    report_type: Optional[str] = "functional"
 
 class WikiCacheRequest(BaseModel):
     """
@@ -108,6 +113,7 @@ class WikiCacheRequest(BaseModel):
     generated_pages: Dict[str, WikiPage]
     provider: str
     model: str
+    report_type: Optional[str] = "functional"
 
 class WikiExportRequest(BaseModel):
     """
@@ -319,6 +325,73 @@ async def get_local_repo_structure(path: str = Query(None, description="Path to 
             content={"error": f"Error processing local repository: {str(e)}"}
         )
 
+UPLOAD_DIR = os.path.join(get_adalflow_default_root_path(), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.post("/upload/project")
+async def upload_project(file: UploadFile = File(...)):
+    """
+    Upload a zipped project folder for wiki generation.
+    Accepts a ZIP file, extracts it, and returns the server-side path.
+    """
+    if not file.filename or not file.filename.endswith('.zip'):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Please upload a .zip file"}
+        )
+
+    upload_id = str(uuid.uuid4())[:8]
+    extract_path = os.path.join(UPLOAD_DIR, upload_id)
+    os.makedirs(extract_path, exist_ok=True)
+
+    try:
+        # Save the uploaded ZIP file
+        zip_path = os.path.join(extract_path, "project.zip")
+        content = await file.read()
+        with open(zip_path, "wb") as f:
+            f.write(content)
+
+        logger.info(f"Uploaded ZIP file ({len(content)} bytes) to {zip_path}")
+
+        # Extract the ZIP
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(extract_path)
+        os.remove(zip_path)  # cleanup the zip file
+
+        # If ZIP had a single root folder, use that as project root
+        entries = [e for e in os.listdir(extract_path) if not e.startswith('.')]
+        project_path = extract_path
+        if len(entries) == 1 and os.path.isdir(os.path.join(extract_path, entries[0])):
+            project_path = os.path.join(extract_path, entries[0])
+
+        # Count files
+        file_count = sum(len(files) for _, _, files in os.walk(project_path))
+
+        logger.info(f"Extracted project to {project_path} ({file_count} files)")
+
+        return {
+            "upload_id": upload_id,
+            "path": project_path,
+            "file_count": file_count
+        }
+
+    except zipfile.BadZipFile:
+        # Cleanup on error
+        shutil.rmtree(extract_path, ignore_errors=True)
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Invalid ZIP file. Please upload a valid .zip archive."}
+        )
+    except Exception as e:
+        # Cleanup on error
+        shutil.rmtree(extract_path, ignore_errors=True)
+        logger.error(f"Error processing uploaded project: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error processing uploaded project: {str(e)}"}
+        )
+
+
 def generate_markdown_export(repo_url: str, pages: List[WikiPage]) -> str:
     """
     Generate Markdown export of wiki pages.
@@ -405,14 +478,26 @@ app.add_websocket_route("/ws/chat", handle_websocket_chat)
 WIKI_CACHE_DIR = os.path.join(get_adalflow_default_root_path(), "wikicache")
 os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
 
-def get_wiki_cache_path(owner: str, repo: str, repo_type: str, language: str) -> str:
+def get_wiki_cache_path(owner: str, repo: str, repo_type: str, language: str, report_type: str = "functional") -> str:
     """Generates the file path for a given wiki cache."""
+    filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}_{report_type}.json"
+    return os.path.join(WIKI_CACHE_DIR, filename)
+
+def get_wiki_cache_path_legacy(owner: str, repo: str, repo_type: str, language: str) -> str:
+    """Generates the legacy file path for a given wiki cache."""
     filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}.json"
     return os.path.join(WIKI_CACHE_DIR, filename)
 
-async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str) -> Optional[WikiCacheData]:
+async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str, report_type: str = "functional") -> Optional[WikiCacheData]:
     """Reads wiki cache data from the file system."""
-    cache_path = get_wiki_cache_path(owner, repo, repo_type, language)
+    cache_path = get_wiki_cache_path(owner, repo, repo_type, language, report_type)
+    
+    # Fallback checking for legacy cached projects which were implicitly "functional"
+    if not os.path.exists(cache_path) and report_type == "functional":
+        legacy_path = get_wiki_cache_path_legacy(owner, repo, repo_type, language)
+        if os.path.exists(legacy_path):
+            cache_path = legacy_path
+
     if os.path.exists(cache_path):
         try:
             with open(cache_path, 'r', encoding='utf-8') as f:
@@ -425,7 +510,8 @@ async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str) 
 
 async def save_wiki_cache(data: WikiCacheRequest) -> bool:
     """Saves wiki cache data to the file system."""
-    cache_path = get_wiki_cache_path(data.repo.owner, data.repo.repo, data.repo.type, data.language)
+    report_type = data.report_type if data.report_type else "functional"
+    cache_path = get_wiki_cache_path(data.repo.owner, data.repo.repo, data.repo.type, data.language, report_type)
     logger.info(f"Attempting to save wiki cache. Path: {cache_path}")
     try:
         payload = WikiCacheData(
@@ -433,7 +519,8 @@ async def save_wiki_cache(data: WikiCacheRequest) -> bool:
             generated_pages=data.generated_pages,
             repo=data.repo,
             provider=data.provider,
-            model=data.model
+            model=data.model,
+            report_type=report_type
         )
         # Log size of data to be cached for debugging (avoid logging full content if large)
         try:
@@ -462,26 +549,29 @@ async def save_wiki_cache(data: WikiCacheRequest) -> bool:
 async def get_cached_wiki(
     owner: str = Query(..., description="Repository owner"),
     repo: str = Query(..., description="Repository name"),
-    repo_type: str = Query(..., description="Repository type (e.g., github, gitlab)"),
-    language: str = Query(..., description="Language of the wiki content")
+    repo_type: str = Query(..., description="Repository type"),
+    language: str = Query(..., description="Language"),
+    report_type: str = Query("functional", description="Report Type (technical or functional)")
 ):
     """
-    Retrieves cached wiki data (structure and generated pages) for a repository.
+    Retrieves the wiki cache data.
     """
-    # Language validation
-    supported_langs = configs["lang_config"]["supported_languages"]
-    if not supported_langs.__contains__(language):
-        language = configs["lang_config"]["default"]
+    logger.info(f"Received GET request for wiki_cache: owner={owner}, repo={repo}, repo_type={repo_type}, language={language}, report_type={report_type}")
+    try:
+        # Language validation
+        supported_langs = configs["lang_config"]["supported_languages"]
+        if not supported_langs.__contains__(language):
+            language = configs["lang_config"]["default"]
 
-    logger.info(f"Attempting to retrieve wiki cache for {owner}/{repo} ({repo_type}), lang: {language}")
-    cached_data = await read_wiki_cache(owner, repo, repo_type, language)
-    if cached_data:
-        return cached_data
-    else:
-        # Return 200 with null body if not found, as frontend expects this behavior
-        # Or, raise HTTPException(status_code=404, detail="Wiki cache not found") if preferred
-        logger.info(f"Wiki cache not found for {owner}/{repo} ({repo_type}), lang: {language}")
-        return None
+        cached_data = await read_wiki_cache(owner, repo, repo_type, language, report_type)
+        if cached_data:
+            return cached_data
+        else:
+            logger.info(f"Wiki cache not found for {owner}/{repo} ({repo_type}), lang: {language}, report_type: {report_type}")
+            return None
+    except Exception as e:
+        logger.error(f"Error retrieving wiki cache for {owner}/{repo} ({repo_type}), lang: {language}, report_type: {report_type}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve wiki cache: {str(e)}")
 
 @app.post("/api/wiki_cache")
 async def store_wiki_cache(request_data: WikiCacheRequest):
@@ -505,37 +595,50 @@ async def store_wiki_cache(request_data: WikiCacheRequest):
 async def delete_wiki_cache(
     owner: str = Query(..., description="Repository owner"),
     repo: str = Query(..., description="Repository name"),
-    repo_type: str = Query(..., description="Repository type (e.g., github, gitlab)"),
-    language: str = Query(..., description="Language of the wiki content"),
+    repo_type: str = Query(..., description="Repository type"),
+    language: str = Query(..., description="Language"),
+    report_type: str = Query("functional", description="Report Type (technical or functional)"),
     authorization_code: Optional[str] = Query(None, description="Authorization code")
 ):
     """
-    Deletes a specific wiki cache from the file system.
+    Deletes the wiki cache data.
     """
-    # Language validation
-    supported_langs = configs["lang_config"]["supported_languages"]
-    if not supported_langs.__contains__(language):
-        raise HTTPException(status_code=400, detail="Language is not supported")
+    logger.info(f"Received DELETE request for wiki_cache: owner={owner}, repo={repo}, repo_type={repo_type}, language={language}, report_type={report_type}")
+    try:
+        # Language validation
+        supported_langs = configs["lang_config"]["supported_languages"]
+        if not supported_langs.__contains__(language):
+            raise HTTPException(status_code=400, detail="Language is not supported")
 
-    if WIKI_AUTH_MODE:
-        logger.info("check the authorization code")
-        if not authorization_code or WIKI_AUTH_CODE != authorization_code:
-            raise HTTPException(status_code=401, detail="Authorization code is invalid")
+        if WIKI_AUTH_MODE:
+            logger.info("check the authorization code")
+            if not authorization_code or WIKI_AUTH_CODE != authorization_code:
+                raise HTTPException(status_code=401, detail="Authorization code is invalid")
 
-    logger.info(f"Attempting to delete wiki cache for {owner}/{repo} ({repo_type}), lang: {language}")
-    cache_path = get_wiki_cache_path(owner, repo, repo_type, language)
+        logger.info(f"Attempting to delete wiki cache for {owner}/{repo} ({repo_type}), lang: {language}, report_type: {report_type}")
+        cache_path = get_wiki_cache_path(owner, repo, repo_type, language, report_type)
 
-    if os.path.exists(cache_path):
-        try:
-            os.remove(cache_path)
-            logger.info(f"Successfully deleted wiki cache: {cache_path}")
-            return {"message": f"Wiki cache for {owner}/{repo} ({language}) deleted successfully"}
-        except Exception as e:
-            logger.error(f"Error deleting wiki cache {cache_path}: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to delete wiki cache: {str(e)}")
-    else:
-        logger.warning(f"Wiki cache not found, cannot delete: {cache_path}")
-        raise HTTPException(status_code=404, detail="Wiki cache not found")
+        if not os.path.exists(cache_path) and report_type == "functional":
+            legacy_path = get_wiki_cache_path_legacy(owner, repo, repo_type, language)
+            if os.path.exists(legacy_path):
+                cache_path = legacy_path
+
+        if os.path.exists(cache_path):
+            try:
+                os.remove(cache_path)
+                logger.info(f"Successfully deleted wiki cache: {cache_path}")
+                return {"message": f"Wiki cache for {owner}/{repo} ({language}, {report_type}) deleted successfully"}
+            except Exception as e:
+                logger.error(f"Error deleting wiki cache {cache_path}: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to delete wiki cache: {str(e)}")
+        else:
+            logger.warning(f"Wiki cache not found, cannot delete: {cache_path}")
+            raise HTTPException(status_code=404, detail="Wiki cache not found")
+    except HTTPException:
+        raise # Re-raise HTTPExceptions
+    except Exception as e:
+        logger.error(f"Error deleting wiki cache for {owner}/{repo} ({repo_type}), lang: {language}, report_type: {report_type}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete wiki cache: {str(e)}")
 
 @app.get("/health")
 async def health_check():
@@ -598,14 +701,24 @@ async def get_processed_projects():
                     stats = await asyncio.to_thread(os.stat, file_path) # Use asyncio.to_thread for os.stat
                     parts = filename.replace("deepwiki_cache_", "").replace(".json", "").split('_')
 
-                    # Expecting repo_type_owner_repo_language
-                    # Example: deepwiki_cache_github_AsyncFuncAI_deepwiki-open_en.json
-                    # parts = [github, AsyncFuncAI, deepwiki-open, en]
+                    # Parsing string names
+                    # Legacy check: deepwiki_cache_{repo_type}_{owner}_{repo}_{language}.json (length is dependent on repo usually)
+                    # New: deepwiki_cache_{repo_type}_{owner}_{repo}_{language}_{report_type}.json
+                    # To be safe, let's extract by knowing that report_type is the last element ("technical" or "functional"),
+                    # and language is the second to last. If report_type doesn't match standard terms, we treat it as legacy.
                     if len(parts) >= 4:
                         repo_type = parts[0]
                         owner = parts[1]
-                        language = parts[-1] # language is the last part
-                        repo = "_".join(parts[2:-1]) # repo can contain underscores
+                        
+                        potential_report_type = parts[-1]
+                        if potential_report_type in ["technical", "functional"]:
+                            report_type = potential_report_type
+                            language = parts[-2]
+                            repo = "_".join(parts[2:-2])
+                        else:
+                            report_type = "functional" # Legacy default
+                            language = parts[-1]
+                            repo = "_".join(parts[2:-1])
 
                         project_entries.append(
                             ProcessedProjectEntry(
@@ -614,7 +727,8 @@ async def get_processed_projects():
                                 repo=repo,
                                 name=f"{owner}/{repo}",
                                 repo_type=repo_type,
-                                submittedAt=int(stats.st_mtime * 1000), # Convert to milliseconds
+                                report_type=report_type,
+                                submittedAt=int(stats.st_mtime * 1000), # Use modification time
                                 language=language
                             )
                         )

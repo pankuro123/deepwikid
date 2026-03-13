@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FaWikipediaW, FaGithub, FaCoffee, FaTwitter } from 'react-icons/fa';
+import { FaWikipediaW, FaGithub, FaCoffee, FaTwitter, FaUpload } from 'react-icons/fa';
 import ThemeToggle from '@/components/theme-toggle';
 import Mermaid from '../components/Mermaid';
 import ConfigurationModal from '@/components/ConfigurationModal';
@@ -89,6 +89,7 @@ export default function Home() {
         if (config) {
           setSelectedLanguage(config.selectedLanguage || language);
           setIsComprehensiveView(config.isComprehensiveView === undefined ? true : config.isComprehensiveView);
+          setReportType(config.reportType || 'functional');
           setProvider(config.provider || '');
           setModel(config.model || '');
           setIsCustomModel(config.isCustomModel || false);
@@ -111,7 +112,7 @@ export default function Home() {
     if (newRepoUrl.trim() === "") {
       // Optionally reset fields if input is cleared
     } else {
-        loadConfigFromCache(newRepoUrl);
+      loadConfigFromCache(newRepoUrl);
     }
   };
 
@@ -119,6 +120,7 @@ export default function Home() {
     if (repositoryInput) {
       loadConfigFromCache(repositoryInput);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Provider-based model selection state
@@ -130,6 +132,9 @@ export default function Home() {
   // Wiki type state - default to comprehensive view
   const [isComprehensiveView, setIsComprehensiveView] = useState<boolean>(true);
 
+  // Report type state - default to functional
+  const [reportType, setReportType] = useState<'technical' | 'functional'>('functional');
+
   const [excludedDirs, setExcludedDirs] = useState('');
   const [excludedFiles, setExcludedFiles] = useState('');
   const [includedDirs, setIncludedDirs] = useState('');
@@ -138,7 +143,9 @@ export default function Home() {
   const [accessToken, setAccessToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string>(language);
+  const zipInputRef = useRef<HTMLInputElement>(null);
 
   // Authentication state
   const [authRequired, setAuthRequired] = useState<boolean>(false);
@@ -266,8 +273,8 @@ export default function Home() {
 
   const validateAuthCode = async () => {
     try {
-      if(authRequired) {
-        if(!authCode) {
+      if (authRequired) {
+        if (!authCode) {
           return false;
         }
         const response = await fetch('/api/auth/validate', {
@@ -275,7 +282,7 @@ export default function Home() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({'code': authCode})
+          body: JSON.stringify({ 'code': authCode })
         });
         if (!response.ok) {
           return false;
@@ -293,7 +300,7 @@ export default function Home() {
 
     // Check authorization code
     const validation = await validateAuthCode();
-    if(!validation) {
+    if (!validation) {
       setError(`Failed to validate the authorization code`);
       console.error(`Failed to validate the authorization code`);
       setIsConfigModalOpen(false);
@@ -313,6 +320,7 @@ export default function Home() {
         const configToSave = {
           selectedLanguage,
           isComprehensiveView,
+          reportType,
           provider,
           model,
           isCustomModel,
@@ -334,6 +342,7 @@ export default function Home() {
 
     // Parse repository input
     const parsedRepo = parseRepositoryInput(repositoryInput);
+
 
     if (!parsedRepo) {
       setError('Invalid repository format. Use "owner/repo", GitHub/GitLab/BitBucket URL, or a local folder path like "/path/to/folder" or "C:\\path\\to\\folder".');
@@ -382,12 +391,60 @@ export default function Home() {
     // Add comprehensive parameter
     params.append('comprehensive', isComprehensiveView.toString());
 
+    // Add report type parameter
+    params.append('report_type', reportType);
+
     const queryString = params.toString() ? `?${params.toString()}` : '';
 
     // Navigate to the dynamic route
     router.push(`/${owner}/${repo}${queryString}`);
 
     // The isSubmitting state will be reset when the component unmounts during navigation
+  };
+
+  const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.zip')) {
+      setError('Please select a .zip file');
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/upload/project', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+
+      const data = await response.json();
+
+      // Auto-fill the input with the server-side path
+      setRepositoryInput(data.path);
+      setError(null);
+
+      // Auto-open the config modal so user can proceed
+      setIsConfigModalOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
+    } finally {
+      setIsUploading(false);
+      // Reset the file input so the same file can be selected again
+      if (zipInputRef.current) {
+        zipInputRef.current.value = '';
+      }
+    }
   };
 
   return (
@@ -414,7 +471,6 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleFormSubmit} className="flex flex-col gap-3 w-full max-w-3xl">
-            {/* Repository URL input and submit button */}
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <input
@@ -430,13 +486,53 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              <button
-                type="submit"
-                className="btn-japanese px-6 py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? t('common.processing') : t('common.generateWiki')}
-              </button>
+              <div className="flex gap-2">
+                {/* Upload ZIP button */}
+                <input
+                  ref={zipInputRef}
+                  type="file"
+                  accept=".zip"
+                  className="hidden"
+                  onChange={handleZipUpload}
+                />
+                <button
+                  type="button"
+                  onClick={() => zipInputRef.current?.click()}
+                  className="px-4 py-2.5 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--foreground)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                  disabled={isUploading || isSubmitting}
+                  title="Upload a zipped project"
+                >
+                  {isUploading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <FaUpload className="text-sm" />
+                      Upload ZIP
+                    </>
+                  )}
+                </button>
+                {/* Generate Wiki button */}
+                <button
+                  type="submit"
+                  className="btn-japanese px-6 py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isSubmitting || isUploading}
+                >
+                  {isSubmitting ? t('common.processing') : t('common.generateWiki')}
+                </button>
+                {/* Jira Tickets button */}
+                <Link
+                  href="/jira"
+                  className="px-6 py-2.5 rounded-lg border border-[var(--accent-primary)] text-[var(--accent-primary)] hover:bg-[var(--accent-primary)] hover:text-white transition-colors flex items-center justify-center whitespace-nowrap"
+                >
+                  Jira Tickets
+                </Link>
+              </div>
             </div>
           </form>
 
@@ -450,6 +546,8 @@ export default function Home() {
             supportedLanguages={supportedLanguages}
             isComprehensiveView={isComprehensiveView}
             setIsComprehensiveView={setIsComprehensiveView}
+            reportType={reportType}
+            setReportType={setReportType}
             provider={provider}
             setProvider={setProvider}
             model={model}
@@ -530,67 +628,71 @@ export default function Home() {
                 </p>
               </div>
 
-          {/* Quick Start section - redesigned for better spacing */}
-          <div
-            className="w-full max-w-2xl mb-10 bg-[var(--accent-primary)]/5 border border-[var(--accent-primary)]/20 rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-[var(--accent-primary)] mb-3 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24"
-                stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {t('home.quickStart')}
-            </h3>
-            <p className="text-sm text-[var(--foreground)] mb-3">{t('home.enterRepoUrl')}</p>
-            <div className="grid grid-cols-1 gap-3 text-xs text-[var(--muted)]">
+              {/* Quick Start section - redesigned for better spacing */}
               <div
-                className="bg-[var(--background)]/70 p-3 rounded border border-[var(--border-color)] font-mono overflow-x-hidden whitespace-nowrap"
-              >https://github.com/AsyncFuncAI/deepwiki-open
-              </div>
-              <div
-                className="bg-[var(--background)]/70 p-3 rounded border border-[var(--border-color)] font-mono overflow-x-hidden whitespace-nowrap"
-              >https://gitlab.com/gitlab-org/gitlab
-              </div>
-              <div
-                className="bg-[var(--background)]/70 p-3 rounded border border-[var(--border-color)] font-mono overflow-x-hidden whitespace-nowrap"
-              >AsyncFuncAI/deepwiki-open
-              </div>
-              <div
-                className="bg-[var(--background)]/70 p-3 rounded border border-[var(--border-color)] font-mono overflow-x-hidden whitespace-nowrap"
-              >https://bitbucket.org/atlassian/atlaskit
-              </div>
-            </div>
-          </div>
-
-          {/* Visualization section - improved for better visibility */}
-          <div
-            className="w-full max-w-2xl mb-8 bg-[var(--background)]/70 rounded-lg p-6 border border-[var(--border-color)]">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 text-[var(--accent-primary)] flex-shrink-0 mt-0.5 sm:mt-0" fill="none"
-                viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              <h3 className="text-base font-semibold text-[var(--foreground)] font-serif">{t('home.advancedVisualization')}</h3>
-            </div>
-            <p className="text-sm text-[var(--foreground)] mb-5 leading-relaxed">
-              {t('home.diagramDescription')}
-            </p>
-
-            {/* Diagrams with improved layout */}
-            <div className="grid grid-cols-1 gap-6">
-              <div className="bg-[var(--card-bg)] p-4 rounded-lg border border-[var(--border-color)] shadow-custom">
-                <h4 className="text-sm font-medium text-[var(--foreground)] mb-3 font-serif">{t('home.flowDiagram')}</h4>
-                <Mermaid chart={DEMO_FLOW_CHART} />
+                className="w-full max-w-2xl mb-10 bg-[var(--accent-primary)]/5 border border-[var(--accent-primary)]/20 rounded-lg p-5">
+                <h3 className="text-sm font-semibold text-[var(--accent-primary)] mb-3 flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {t('home.quickStart')}
+                </h3>
+                <p className="text-sm text-[var(--foreground)] mb-3">{t('home.enterRepoUrl')}</p>
+                <div className="grid grid-cols-1 gap-3 text-xs text-[var(--muted)]">
+                  <div
+                    className="bg-[var(--background)]/70 p-3 rounded border border-[var(--border-color)] font-mono overflow-x-hidden whitespace-nowrap"
+                  >https://github.com/AsyncFuncAI/deepwiki-open
+                  </div>
+                  <div
+                    className="bg-[var(--background)]/70 p-3 rounded border border-[var(--border-color)] font-mono overflow-x-hidden whitespace-nowrap"
+                  >https://gitlab.com/gitlab-org/gitlab
+                  </div>
+                  <div
+                    className="bg-[var(--background)]/70 p-3 rounded border border-[var(--border-color)] font-mono overflow-x-hidden whitespace-nowrap"
+                  >AsyncFuncAI/deepwiki-open
+                  </div>
+                  <div
+                    className="bg-[var(--background)]/70 p-3 rounded border border-[var(--border-color)] font-mono overflow-x-hidden whitespace-nowrap"
+                  >https://bitbucket.org/atlassian/atlaskit
+                  </div>
+                  <div
+                    className="bg-[var(--background)]/70 p-3 rounded border border-[var(--border-color)] font-mono overflow-x-hidden whitespace-nowrap"
+                  >https://bitbucket.cib.echonet/scm/corix/comet-batch-comet.git
+                  </div>
+                </div>
               </div>
 
-              <div className="bg-[var(--card-bg)] p-4 rounded-lg border border-[var(--border-color)] shadow-custom">
-                <h4 className="text-sm font-medium text-[var(--foreground)] mb-3 font-serif">{t('home.sequenceDiagram')}</h4>
-                <Mermaid chart={DEMO_SEQUENCE_CHART} />
+              {/* Visualization section - improved for better visibility */}
+              <div
+                className="w-full max-w-2xl mb-8 bg-[var(--background)]/70 rounded-lg p-6 border border-[var(--border-color)]">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 text-[var(--accent-primary)] flex-shrink-0 mt-0.5 sm:mt-0" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  <h3 className="text-base font-semibold text-[var(--foreground)] font-serif">{t('home.advancedVisualization')}</h3>
+                </div>
+                <p className="text-sm text-[var(--foreground)] mb-5 leading-relaxed">
+                  {t('home.diagramDescription')}
+                </p>
+
+                {/* Diagrams with improved layout */}
+                <div className="grid grid-cols-1 gap-6">
+                  <div className="bg-[var(--card-bg)] p-4 rounded-lg border border-[var(--border-color)] shadow-custom">
+                    <h4 className="text-sm font-medium text-[var(--foreground)] mb-3 font-serif">{t('home.flowDiagram')}</h4>
+                    <Mermaid chart={DEMO_FLOW_CHART} />
+                  </div>
+
+                  <div className="bg-[var(--card-bg)] p-4 rounded-lg border border-[var(--border-color)] shadow-custom">
+                    <h4 className="text-sm font-medium text-[var(--foreground)] mb-3 font-serif">{t('home.sequenceDiagram')}</h4>
+                    <Mermaid chart={DEMO_SEQUENCE_CHART} />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
             </>
           )}
         </div>

@@ -90,7 +90,12 @@
     "excludeModeDescription": "Especificar caminhos a serem excluídos do processamento (comportamento padrão)",
     "includeModeDescription": "Especificar apenas os caminhos a serem incluídos, ignorando todos os outros",
     "authorizationCode": "Código de Autorização",
-    "authorizationRequired": "A autenticação é necessária para gerar a wiki."
+    "authorizationRequired": "A autenticação é necessária para gerar a wiki.",
+    "reportType": "Report Type",
+    "technical": "Technical",
+    "functional": "Functional (FEX)",
+    "technicalDescription": "Standard technical documentation",
+    "functionalDescription": "Business analyst requirement document"
   },
   "footer": {
     "copyright": "DeepWiki - Documentação com IA para repositórios de código"

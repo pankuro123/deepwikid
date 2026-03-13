@@ -13,7 +13,9 @@ import { extractUrlDomain, extractUrlPath } from '@/utils/urlDecoder';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { marked } from 'marked';
 import { FaBitbucket, FaBookOpen, FaComments, FaDownload, FaExclamationTriangle, FaFileExport, FaFolder, FaGithub, FaGitlab, FaHome, FaSync, FaTimes } from 'react-icons/fa';
+import { getWikiGenerationPrompt } from '@/utils/prompts';
 // Define the WikiSection and WikiStructure types directly in this file
 // since the imported types don't have the sections and rootSections properties
 interface WikiSection {
@@ -88,8 +90,8 @@ const wikiStyles = `
 `;
 
 // Helper function to generate cache key for localStorage
-const getCacheKey = (owner: string, repo: string, repoType: string, language: string, isComprehensive: boolean = true): string => {
-  return `deepwiki_cache_${repoType}_${owner}_${repo}_${language}_${isComprehensive ? 'comprehensive' : 'concise'}`;
+const getCacheKey = (owner: string, repo: string, repoType: string, language: string, isComprehensive: boolean = true, reportType: string = 'functional'): string => {
+  return `deepwiki_cache_${repoType}_${owner}_${repo}_${language}_${isComprehensive ? 'comprehensive' : 'concise'}_${reportType}`;
 };
 
 // Helper function to add tokens and other parameters to request body
@@ -259,6 +261,9 @@ export default function RepoWikiPage() {
   // Wiki type state - default to comprehensive view
   const isComprehensiveParam = searchParams.get('comprehensive') !== 'false';
   const [isComprehensiveView, setIsComprehensiveView] = useState(isComprehensiveParam);
+  // Report type state
+  const reportTypeParam = searchParams.get('report_type');
+  const [reportType, setReportType] = useState<'technical' | 'functional'>((reportTypeParam as 'technical' | 'functional') || 'functional');
   // Using useRef for activeContentRequests to maintain a single instance across renders
   // This map tracks which pages are currently being processed to prevent duplicate requests
   // Note: In a multi-threaded environment, additional synchronization would be needed,
@@ -298,7 +303,7 @@ export default function RepoWikiPage() {
     try {
       const url = new URL(repoUrl);
       const hostname = url.hostname;
-      
+
       if (hostname === 'github.com' || hostname.includes('github')) {
         // GitHub URL format: https://github.com/owner/repo/blob/branch/path
         return `${repoUrl}/blob/${defaultBranch}/${filePath}`;
@@ -306,7 +311,20 @@ export default function RepoWikiPage() {
         // GitLab URL format: https://gitlab.com/owner/repo/-/blob/branch/path
         return `${repoUrl}/-/blob/${defaultBranch}/${filePath}`;
       } else if (hostname === 'bitbucket.org' || hostname.includes('bitbucket')) {
-        // Bitbucket URL format: https://bitbucket.org/owner/repo/src/branch/path
+        // Check if this is Bitbucket Server (has /scm/ in path)
+        if (url.pathname.includes('/scm/')) {
+          // Bitbucket Server URL format:
+          // Clone URL: https://bitbucket.example.com/scm/{project}/{repo}.git
+          // Browse URL: https://bitbucket.example.com/projects/{project}/repos/{repo}/browse/{path}?at=refs/heads/{branch}
+          const pathParts = url.pathname.replace(/\.git$/, '').split('/').filter(Boolean);
+          const scmIdx = pathParts.indexOf('scm');
+          if (scmIdx >= 0 && pathParts.length > scmIdx + 2) {
+            const project = pathParts[scmIdx + 1];
+            const repoName = pathParts[scmIdx + 2];
+            return `${url.origin}/projects/${project}/repos/${repoName}/browse/${filePath}?at=refs/heads/${defaultBranch}`;
+          }
+        }
+        // Bitbucket Cloud URL format: https://bitbucket.org/owner/repo/src/branch/path
         return `${repoUrl}/src/${defaultBranch}/${filePath}`;
       }
     } catch (error) {
@@ -415,115 +433,8 @@ export default function RepoWikiPage() {
         // Get repository URL
         const repoUrl = getRepoUrl(effectiveRepoInfo);
 
-        // Create the prompt content - simplified to avoid message dialogs
- const promptContent =
-`You are an expert technical writer and software architect.
-Your task is to generate a comprehensive and accurate technical wiki page in Markdown format about a specific feature, system, or module within a given software project.
-
-You will be given:
-1. The "[WIKI_PAGE_TOPIC]" for the page you need to create.
-2. A list of "[RELEVANT_SOURCE_FILES]" from the project that you MUST use as the sole basis for the content. You have access to the full content of these files. You MUST use AT LEAST 5 relevant source files for comprehensive coverage - if fewer are provided, search for additional related files in the codebase.
-
-CRITICAL STARTING INSTRUCTION:
-The very first thing on the page MUST be a \`<details>\` block listing ALL the \`[RELEVANT_SOURCE_FILES]\` you used to generate the content. There MUST be AT LEAST 5 source files listed - if fewer were provided, you MUST find additional related files to include.
-Format it exactly like this:
-<details>
-<summary>Relevant source files</summary>
-
-Remember, do not provide any acknowledgements, disclaimers, apologies, or any other preface before the \`<details>\` block. JUST START with the \`<details>\` block.
-The following files were used as context for generating this wiki page:
-
-${filePaths.map(path => `- [${path}](${generateFileUrl(path)})`).join('\n')}
-<!-- Add additional relevant files if fewer than 5 were provided -->
-</details>
-
-Immediately after the \`<details>\` block, the main title of the page should be a H1 Markdown heading: \`# ${page.title}\`.
-
-Based ONLY on the content of the \`[RELEVANT_SOURCE_FILES]\`:
-
-1.  **Introduction:** Start with a concise introduction (1-2 paragraphs) explaining the purpose, scope, and high-level overview of "${page.title}" within the context of the overall project. If relevant, and if information is available in the provided files, link to other potential wiki pages using the format \`[Link Text](#page-anchor-or-id)\`.
-
-2.  **Detailed Sections:** Break down "${page.title}" into logical sections using H2 (\`##\`) and H3 (\`###\`) Markdown headings. For each section:
-    *   Explain the architecture, components, data flow, or logic relevant to the section's focus, as evidenced in the source files.
-    *   Identify key functions, classes, data structures, API endpoints, or configuration elements pertinent to that section.
-
-3.  **Mermaid Diagrams:**
-    *   EXTENSIVELY use Mermaid diagrams (e.g., \`flowchart TD\`, \`sequenceDiagram\`, \`classDiagram\`, \`erDiagram\`, \`graph TD\`) to visually represent architectures, flows, relationships, and schemas found in the source files.
-    *   Ensure diagrams are accurate and directly derived from information in the \`[RELEVANT_SOURCE_FILES]\`.
-    *   Provide a brief explanation before or after each diagram to give context.
-    *   CRITICAL: All diagrams MUST follow strict vertical orientation:
-       - Use "graph TD" (top-down) directive for flow diagrams
-       - NEVER use "graph LR" (left-right)
-       - Maximum node width should be 3-4 words
-       - For sequence diagrams:
-         - Start with "sequenceDiagram" directive on its own line
-         - Define ALL participants at the beginning using "participant" keyword
-         - Optionally specify participant types: actor, boundary, control, entity, database, collections, queue
-         - Use descriptive but concise participant names, or use aliases: "participant A as Alice"
-         - Use the correct Mermaid arrow syntax (8 types available):
-           - -> solid line without arrow (rarely used)
-           - --> dotted line without arrow (rarely used)
-           - ->> solid line with arrowhead (most common for requests/calls)
-           - -->> dotted line with arrowhead (most common for responses/returns)
-           - ->x solid line with X at end (failed/error message)
-           - -->x dotted line with X at end (failed/error response)
-           - -) solid line with open arrow (async message, fire-and-forget)
-           - --) dotted line with open arrow (async response)
-           - Examples: A->>B: Request, B-->>A: Response, A->xB: Error, A-)B: Async event
-         - Use +/- suffix for activation boxes: A->>+B: Start (activates B), B-->>-A: End (deactivates B)
-         - Group related participants using "box": box GroupName ... end
-         - Use structural elements for complex flows:
-           - loop LoopText ... end (for iterations)
-           - alt ConditionText ... else ... end (for conditionals)
-           - opt OptionalText ... end (for optional flows)
-           - par ParallelText ... and ... end (for parallel actions)
-           - critical CriticalText ... option ... end (for critical regions)
-           - break BreakText ... end (for breaking flows/exceptions)
-         - Add notes for clarification: "Note over A,B: Description", "Note right of A: Detail"
-         - Use autonumber directive to add sequence numbers to messages
-         - NEVER use flowchart-style labels like A--|label|-->B. Always use a colon for labels: A->>B: My Label
-
-4.  **Tables:**
-    *   Use Markdown tables to summarize information such as:
-        *   Key features or components and their descriptions.
-        *   API endpoint parameters, types, and descriptions.
-        *   Configuration options, their types, and default values.
-        *   Data model fields, types, constraints, and descriptions.
-
-5.  **Code Snippets (ENTIRELY OPTIONAL):**
-    *   Include short, relevant code snippets (e.g., Python, Java, JavaScript, SQL, JSON, YAML) directly from the \`[RELEVANT_SOURCE_FILES]\` to illustrate key implementation details, data structures, or configurations.
-    *   Ensure snippets are well-formatted within Markdown code blocks with appropriate language identifiers.
-
-6.  **Source Citations (EXTREMELY IMPORTANT):**
-    *   For EVERY piece of significant information, explanation, diagram, table entry, or code snippet, you MUST cite the specific source file(s) and relevant line numbers from which the information was derived.
-    *   Place citations at the end of the paragraph, under the diagram/table, or after the code snippet.
-    *   Use the exact format: \`Sources: [filename.ext:start_line-end_line]()\` for a range, or \`Sources: [filename.ext:line_number]()\` for a single line. Multiple files can be cited: \`Sources: [file1.ext:1-10](), [file2.ext:5](), [dir/file3.ext]()\` (if the whole file is relevant and line numbers are not applicable or too broad).
-    *   If an entire section is overwhelmingly based on one or two files, you can cite them under the section heading in addition to more specific citations within the section.
-    *   IMPORTANT: You MUST cite AT LEAST 5 different source files throughout the wiki page to ensure comprehensive coverage.
-
-7.  **Technical Accuracy:** All information must be derived SOLELY from the \`[RELEVANT_SOURCE_FILES]\`. Do not infer, invent, or use external knowledge about similar systems or common practices unless it's directly supported by the provided code. If information is not present in the provided files, do not include it or explicitly state its absence if crucial to the topic.
-
-8.  **Clarity and Conciseness:** Use clear, professional, and concise technical language suitable for other developers working on or learning about the project. Avoid unnecessary jargon, but use correct technical terms where appropriate.
-
-9.  **Conclusion/Summary:** End with a brief summary paragraph if appropriate for "${page.title}", reiterating the key aspects covered and their significance within the project.
-
-IMPORTANT: Generate the content in ${language === 'en' ? 'English' :
-            language === 'ja' ? 'Japanese (日本語)' :
-            language === 'zh' ? 'Mandarin Chinese (中文)' :
-            language === 'zh-tw' ? 'Traditional Chinese (繁體中文)' :
-            language === 'es' ? 'Spanish (Español)' :
-            language === 'kr' ? 'Korean (한국어)' :
-            language === 'vi' ? 'Vietnamese (Tiếng Việt)' : 
-            language === "pt-br" ? "Brazilian Portuguese (Português Brasileiro)" :
-            language === "fr" ? "Français (French)" :
-            language === "ru" ? "Русский (Russian)" :
-            'English'} language.
-
-Remember:
-- Ground every claim in the provided source files.
-- Prioritize accuracy and direct representation of the code's functionality and structure.
-- Structure the document logically for easy understanding by other developers.
-`;
+        // Create the prompt content using the appropriate template
+        const promptContent = getWikiGenerationPrompt(page.title, filePaths, language, reportType);
 
         // Prepare request body
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -545,7 +456,7 @@ Remember:
         try {
           // Create WebSocket URL from the server base URL
           const serverBaseUrl = process.env.SERVER_BASE_URL || 'http://localhost:8001';
-          const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws')? serverBaseUrl.replace(/^https/, 'wss'): serverBaseUrl.replace(/^http/, 'ws');
+          const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws') ? serverBaseUrl.replace(/^https/, 'wss') : serverBaseUrl.replace(/^http/, 'ws');
           const wsUrl = `${wsBaseUrl}/ws/chat`;
 
           // Create a new WebSocket connection
@@ -678,6 +589,7 @@ Remember:
         setLoadingMessage(undefined); // Clear specific loading message
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generatedPages, currentToken, effectiveRepoInfo, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, language, activeContentRequests, generateFileUrl]);
 
   // Determine the wiki structure from repository data
@@ -709,7 +621,7 @@ Remember:
         type: effectiveRepoInfo.type,
         messages: [{
           role: 'user',
-content: `Analyze this GitHub repository ${owner}/${repo} and create a wiki structure for it.
+          content: `Analyze this GitHub repository ${owner}/${repo} and create a wiki structure for it.
 
 1. The complete file tree of the project:
 <file_tree>
@@ -724,16 +636,16 @@ ${readme}
 I want to create a wiki for this repository. Determine the most logical structure for a wiki based on the repository's content.
 
 IMPORTANT: The wiki content will be generated in ${language === 'en' ? 'English' :
-            language === 'ja' ? 'Japanese (日本語)' :
-            language === 'zh' ? 'Mandarin Chinese (中文)' :
-            language === 'zh-tw' ? 'Traditional Chinese (繁體中文)' :
-            language === 'es' ? 'Spanish (Español)' :
-            language === 'kr' ? 'Korean (한国語)' :
-            language === 'vi' ? 'Vietnamese (Tiếng Việt)' :
-            language === "pt-br" ? "Brazilian Portuguese (Português Brasileiro)" :
-            language === "fr" ? "Français (French)" :
-            language === "ru" ? "Русский (Russian)" :
-            'English'} language.
+              language === 'ja' ? 'Japanese (日本語)' :
+                language === 'zh' ? 'Mandarin Chinese (中文)' :
+                  language === 'zh-tw' ? 'Traditional Chinese (繁體中文)' :
+                    language === 'es' ? 'Spanish (Español)' :
+                      language === 'kr' ? 'Korean (한国語)' :
+                        language === 'vi' ? 'Vietnamese (Tiếng Việt)' :
+                          language === "pt-br" ? "Brazilian Portuguese (Português Brasileiro)" :
+                            language === "fr" ? "Français (French)" :
+                              language === "ru" ? "Русский (Russian)" :
+                                'English'} language.
 
 When designing the wiki structure, include pages that would benefit from visual diagrams, such as:
 - Architecture overviews
@@ -826,7 +738,7 @@ IMPORTANT FORMATTING INSTRUCTIONS:
 - Start directly with <wiki_structure> and end with </wiki_structure>
 
 IMPORTANT:
-1. Create ${isComprehensiveView ? '8-12' : '4-6'} pages that would make a ${isComprehensiveView ? 'comprehensive' : 'concise'} wiki for this repository
+1. Create ${isComprehensiveView ? '8-12' : '3-5'} pages that would make a ${isComprehensiveView ? 'comprehensive' : 'concise'} wiki for this repository
 2. Each page should focus on a specific aspect of the codebase (e.g., architecture, key features, setup)
 3. The relevant_files should be actual files from the repository that would be used to generate that page
 4. Return ONLY valid XML with the structure specified above, with no markdown code block delimiters`
@@ -842,7 +754,7 @@ IMPORTANT:
       try {
         // Create WebSocket URL from the server base URL
         const serverBaseUrl = process.env.SERVER_BASE_URL || 'http://localhost:8001';
-        const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws')? serverBaseUrl.replace(/^https/, 'wss'): serverBaseUrl.replace(/^http/, 'ws');
+        const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws') ? serverBaseUrl.replace(/^https/, 'wss') : serverBaseUrl.replace(/^http/, 'ws');
         const wsUrl = `${wsBaseUrl}/ws/chat`;
 
         // Create a new WebSocket connection
@@ -929,17 +841,17 @@ IMPORTANT:
         }
       }
 
-      if(responseText.includes('Error preparing retriever: Environment variable OPENAI_API_KEY must be set')) {
-         setEmbeddingError(true);
-         throw new Error('OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key.');
-       }
+      if (responseText.includes('Error preparing retriever: Environment variable OPENAI_API_KEY must be set')) {
+        setEmbeddingError(true);
+        throw new Error('OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key.');
+      }
 
-       if(responseText.includes('Ollama model') && responseText.includes('not found')) {
-         setEmbeddingError(true);
-         throw new Error('The specified Ollama embedding model was not found. Please ensure the model is installed locally or select a different embedding model in the configuration.');
-       }
+      if (responseText.includes('Ollama model') && responseText.includes('not found')) {
+        setEmbeddingError(true);
+        throw new Error('The specified Ollama embedding model was not found. Please ensure the model is installed locally or select a different embedding model in the configuration.');
+      }
 
-        // Clean up markdown delimiters
+      // Clean up markdown delimiters
       responseText = responseText.replace(/^```(?:xml)?\s*/i, '').replace(/```\s*$/i, '');
 
       // Extract wiki structure from response
@@ -1218,16 +1130,16 @@ IMPORTANT:
           if (!repoUrl) {
             return 'https://api.github.com'; // Default to public GitHub
           }
-          
+
           try {
             const url = new URL(repoUrl);
             const hostname = url.hostname;
-            
+
             // If it's the public GitHub, use the standard API URL
             if (hostname === 'github.com') {
               return 'https://api.github.com';
             }
-            
+
             // For GitHub Enterprise, use the enterprise API URL format
             // GitHub Enterprise API URL format: https://github.company.com/api/v3
             return `${url.protocol}//${hostname}/api/v3`;
@@ -1243,7 +1155,7 @@ IMPORTANT:
           const repoInfoResponse = await fetch(`${githubApiBaseUrl}/repos/${owner}/${repo}`, {
             headers: createGithubHeaders(currentToken)
           });
-          
+
           if (repoInfoResponse.ok) {
             const repoData = await repoInfoResponse.json();
             defaultBranchLocal = repoData.default_branch;
@@ -1256,7 +1168,7 @@ IMPORTANT:
         }
 
         // Create list of branches to try, prioritizing the actual default branch
-        const branchesToTry = defaultBranchLocal 
+        const branchesToTry = defaultBranchLocal
           ? [defaultBranchLocal, 'main', 'master'].filter((branch, index, arr) => arr.indexOf(branch) === index)
           : ['main', 'master'];
 
@@ -1353,13 +1265,13 @@ IMPORTANT:
           // Step 2: Paginate to fetch full file tree
           let page = 1;
           let morePages = true;
-          
+
           while (morePages) {
             const apiUrl = `${projectInfoUrl}/repository/tree?recursive=true&per_page=100&page=${page}`;
             const response = await fetch(apiUrl, { headers });
 
             if (!response.ok) {
-                const errorData = await response.text();
+              const errorData = await response.text();
               throw new Error(`Error fetching GitLab repository structure (page ${page}): ${errorData}`);
             }
 
@@ -1369,31 +1281,31 @@ IMPORTANT:
             const nextPage = response.headers.get('x-next-page');
             morePages = !!nextPage;
             page = nextPage ? parseInt(nextPage, 10) : page + 1;
-        }
+          }
 
           if (!Array.isArray(filesData) || filesData.length === 0) {
             throw new Error('Could not fetch repository structure. Repository might be empty or inaccessible.');
-        }
+          }
 
           // Step 3: Format file paths
-        fileTreeData = filesData
-          .filter((item: { type: string; path: string }) => item.type === 'blob')
-          .map((item: { type: string; path: string }) => item.path)
-          .join('\n');
+          fileTreeData = filesData
+            .filter((item: { type: string; path: string }) => item.type === 'blob')
+            .map((item: { type: string; path: string }) => item.path)
+            .join('\n');
 
           // Step 4: Try to fetch README.md content
           const readmeUrl = `${projectInfoUrl}/repository/files/README.md/raw`;
-            try {
+          try {
             const readmeResponse = await fetch(readmeUrl, { headers });
-              if (readmeResponse.ok) {
-                readmeContent = await readmeResponse.text();
-                console.log('Successfully fetched GitLab README.md');
-              } else {
+            if (readmeResponse.ok) {
+              readmeContent = await readmeResponse.text();
+              console.log('Successfully fetched GitLab README.md');
+            } else {
               console.warn(`Could not fetch GitLab README.md status: ${readmeResponse.status}`);
-              }
-            } catch (err) {
-            console.warn(`Error fetching GitLab README.md:`, err);
             }
+          } catch (err) {
+            console.warn(`Error fetching GitLab README.md:`, err);
+          }
         } catch (err) {
           console.error("Error during GitLab repository tree retrieval:", err);
           throw err;
@@ -1570,6 +1482,276 @@ IMPORTANT:
     }
   }, [wikiStructure, generatedPages, effectiveRepoInfo, language]);
 
+  // Function to download PDF (Client-side Print)
+  const downloadPdf = useCallback(async () => {
+    if (!wikiStructure || Object.keys(generatedPages).length === 0) {
+      setExportError('No wiki content to export');
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      setExportError(null);
+      setLoadingMessage(language === 'ja' ? 'PDFプレビューを準備中...' : 'Preparing PDF preview...');
+
+      const repoName = effectiveRepoInfo.repo;
+      const title = wikiStructure.title || `${repoName} Wiki`;
+
+      // Configure marked manually for this export to handle mermaid
+      // Since we can't easily perform async renderer operations inside synchronous marked.parse if we were to use plugins,
+      // we'll use a custom renderer or basic replacement.
+      // To keep it simple and robust for the popup:
+      const renderer = new marked.Renderer();
+      const originalCodeRenderer = renderer.code.bind(renderer);
+      renderer.code = ({ text, lang }: { text: string, lang?: string }) => {
+        if (lang === 'mermaid') {
+          return `<div class="mermaid">${text}</div>`;
+        }
+        // Use default renderer for other code
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return originalCodeRenderer({ text, lang, type: 'code', raw: `\`\`\`${lang || ''}\n${text}\n\`\`\`` } as any);
+      };
+
+      // Note: In marked v12+, .use() modifies the global instance or we can pass options. 
+      // Using global marked instance might affect other things if we don't reset, 
+      // but 'marked.parse' with options is cleaner if supported, or we just rely on the global change 
+      // since we want mermaid support everywhere or just for this export.
+      // Let's use the simplest approach: configure, parse, maybe reset? 
+      // Actually, standard react-markdown is used in the UI, so modifying 'marked' global shouldn't affect the UI 
+      // unless react-markdown uses the same global 'marked' instance (unlikely, it uses micromark/remark).
+
+      marked.setOptions({ renderer });
+
+      // Generate HTML Content
+      let contentHtml = '';
+
+      // Sort pages based on structure if possible, otherwise use array
+      // Flatten sections for order?
+      // For now, simple mapping of pages array
+      const pagesToExport = wikiStructure.pages;
+
+      for (const page of pagesToExport) {
+        const pageContent = generatedPages[page.id]?.content || '';
+        // Parse markdown
+        const html = await marked.parse(pageContent);
+
+        contentHtml += `
+          <div id="page-${page.id}" class="page-container">
+            <h2 class="page-title">${page.title}</h2>
+            <div class="content markdown-body">
+              ${html}
+            </div>
+          </div>
+        `;
+      }
+
+      // Open new window
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        throw new Error('Pop-up blocked. Please allow pop-ups for this site to download PDF.');
+      }
+
+      // Write HTML to window
+      const htmlDocument = `
+        <!DOCTYPE html>
+        <html lang="${language}">
+        <head>
+          <meta charset="UTF-8">
+          <title>${title}</title>
+          <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+          <!-- CMU Serif (Computer Modern) -->
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cmu-serif@5.0.19/index.css">
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cmu-typewriter-text@5.0.19/index.css">
+          <!-- Github Markdown for base, but we will override significantly -->
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.0/github-markdown-light.min.css">
+          <style>
+            /* LaTeX-like Styling */
+            body {
+              font-family: "CMU Serif", serif;
+              line-height: 1.6;
+              text-align: justify;
+              max-width: 210mm; /* A4 width */
+              margin: 0 auto;
+              padding: 2.5cm;
+              background: white;
+              color: black;
+              counter-reset: section;
+            }
+
+            /* Reset Markdown default font stacks */
+            .markdown-body {
+              font-family: "CMU Serif", serif !important;
+              font-size: 11pt;
+              line-height: 1.6;
+              color: black;
+              max-width: none;
+              padding: 0;
+            }
+
+            /* Title Block */
+            .wiki-header {
+              text-align: center;
+              margin-bottom: 2cm;
+              border-bottom: none;
+              padding-bottom: 0;
+            }
+            
+            .wiki-title {
+              font-size: 24pt;
+              font-weight: bold;
+              margin-bottom: 1em;
+            }
+            
+            .wiki-meta {
+              color: #000;
+              font-size: 11pt;
+              font-style: italic;
+            }
+
+            /* Headings & Numbering */
+            h1, h2, h3, h4, h5, h6 {
+              font-weight: bold;
+              color: black;
+              margin-top: 1.5em !important;
+              margin-bottom: 0.5em !important;
+              line-height: 1.2;
+              page-break-after: avoid;
+            }
+
+            /* Section Numbering (Simulating LaTeX sections) */
+            /* Assuming h2 is the top level in the generated content per page, or h1 */
+            /* The generated content often starts with h1 or h2 based on the prompt. 
+               Let's assume the pages themselves act as sections. */
+            
+            .page-container {
+              page-break-after: always;
+              margin-bottom: 0;
+            }
+
+            .page-title {
+              font-size: 18pt;
+              font-weight: bold;
+              border-bottom: none; 
+              margin-bottom: 1em;
+              text-align: center;
+              counter-increment: section;
+            }
+            
+            .page-title::before {
+              content: counter(section) ". ";
+            }
+
+            /* Subsection numbering for markdown content */
+            .markdown-body {
+              counter-reset: subsection;
+            }
+            
+            .markdown-body h1, .markdown-body h2 {
+              /* Map markdown h1/h2 to subsections since page title is section */
+              counter-increment: subsection;
+              font-size: 14pt;
+              border-bottom: none;
+            }
+            
+            .markdown-body h1::before, .markdown-body h2::before {
+              content: counter(section) "." counter(subsection) " ";
+            }
+
+            .markdown-body h3 {
+              counter-increment: subsubsection;
+              font-size: 12pt;
+              counter-reset: subsubsection; /* Fix nesting */
+            }
+            /* Note: simplistic counter reset for flat markdown structure might get tricky, 
+               but this provides the visual style requested. */
+            
+            /* Code Blocks */
+            pre, code {
+              font-family: "CMU Typewriter Text", monospace !important;
+              background-color: #f0f0f0 !important;
+              font-size: 0.9em;
+            }
+            
+            pre {
+              border: 1px solid #ddd;
+              padding: 1em !important;
+              border-radius: 0 !important;
+              white-space: pre-wrap;
+            }
+
+            /* Links */
+            a {
+              color: #000 !important;
+              text-decoration: underline;
+            }
+
+            /* Helper for printing */
+            @media print {
+              body {
+                padding: 0;
+                margin: 2.5cm; /* Print margins */
+              }
+              .page-container {
+                page-break-after: always;
+              }
+              /* Ensure backgrounds print */
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+            }
+
+            /* Mermaid */
+            .mermaid {
+              display: flex;
+              justify-content: center;
+              margin: 2em 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="wiki-header">
+            <div class="wiki-title">${title}</div>
+            <div class="wiki-meta">
+              Generated by DeepWiki<br>
+              ${new Date().toLocaleDateString()}
+            </div>
+          </div>
+          
+          ${contentHtml}
+          
+          <script>
+            // Initialize Mermaid
+            mermaid.initialize({ 
+              startOnLoad: true,
+              theme: 'neutral', // Better for print
+              fontFamily: '"CMU Serif", serif'
+            });
+            
+            // Wait for Mermaid to render then trigger print
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+              }, 2000); // Increased timeout to ensure fonts load
+            };
+          </script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlDocument);
+      printWindow.document.close(); // Ensure logic runs
+
+    } catch (err) {
+      console.error('Error preparing PDF print:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error during PDF preparation';
+      setExportError(errorMessage);
+    } finally {
+      setIsExporting(false);
+      setLoadingMessage(undefined);
+    }
+  }, [wikiStructure, generatedPages, effectiveRepoInfo, language]);
+
   // No longer needed as we use the modal directly
 
   const confirmRefresh = useCallback(async (newToken?: string) => {
@@ -1588,6 +1770,7 @@ IMPORTANT:
         is_custom_model: isCustomSelectedModelState.toString(),
         custom_model: customSelectedModelState,
         comprehensive: isComprehensiveView.toString(),
+        report_type: reportType,
         authorization_code: authCode,
       });
 
@@ -1599,7 +1782,7 @@ IMPORTANT:
         params.append('excluded_files', modelExcludedFiles);
       }
 
-      if(authRequired && !authCode) {
+      if (authRequired && !authCode) {
         setIsLoading(false);
         console.error("Authorization code is required");
         setError('Authorization code is required');
@@ -1622,7 +1805,7 @@ IMPORTANT:
         console.warn(`Failed to clear server-side wiki cache (status: ${response.status}): ${errorText}. Proceeding with refresh anyway.`);
         // Optionally, inform the user about the cache clear failure but that refresh will still attempt
         // setError(\`Cache clear failed: ${errorText}. Trying to refresh...\`);
-        if(response.status == 401) {
+        if (response.status == 401) {
           setIsLoading(false);
           setLoadingMessage(undefined);
           setError('Failed to validate the authorization code');
@@ -1653,7 +1836,7 @@ IMPORTANT:
     console.log('Refreshing wiki. Server cache will be overwritten upon new generation if not cleared.');
 
     // Clear the localStorage cache (if any remnants or if it was used before this change)
-    const localStorageCacheKey = getCacheKey(effectiveRepoInfo.owner, effectiveRepoInfo.repo, effectiveRepoInfo.type, language, isComprehensiveView);
+    const localStorageCacheKey = getCacheKey(effectiveRepoInfo.owner, effectiveRepoInfo.repo, effectiveRepoInfo.type, language, isComprehensiveView, reportType);
     localStorage.removeItem(localStorageCacheKey);
 
     // Reset cache loaded flag
@@ -1701,6 +1884,7 @@ IMPORTANT:
             repo_type: effectiveRepoInfo.type,
             language: language,
             comprehensive: isComprehensiveView.toString(),
+            report_type: reportType,
           });
           const response = await fetch(`/api/wiki_cache?${params.toString()}`);
 
@@ -1708,15 +1892,15 @@ IMPORTANT:
             const cachedData = await response.json(); // Returns null if no cache
             if (cachedData && cachedData.wiki_structure && cachedData.generated_pages && Object.keys(cachedData.generated_pages).length > 0) {
               console.log('Using server-cached wiki data');
-              if(cachedData.model) {
+              if (cachedData.model) {
                 setSelectedModelState(cachedData.model);
               }
-              if(cachedData.provider) {
+              if (cachedData.provider) {
                 setSelectedProviderState(cachedData.provider);
               }
 
               // Update repoInfo
-              if(cachedData.repo) {
+              if (cachedData.repo) {
                 setEffectiveRepoInfo(cachedData.repo);
               } else if (cachedData.repo_url && !effectiveRepoInfo.repoUrl) {
                 const updatedRepoInfo = { ...effectiveRepoInfo, repoUrl: cachedData.repo_url };
@@ -1785,7 +1969,7 @@ IMPORTANT:
                 for (const [categoryId, categoryPages] of pageClusters.entries()) {
                   if (categoryPages.length > 0) {
                     const category = categories.find(c => c.id === categoryId) ||
-                                    { id: categoryId, title: categoryId === 'other' ? 'Other' : categoryId.charAt(0).toUpperCase() + categoryId.slice(1) };
+                      { id: categoryId, title: categoryId === 'other' ? 'Other' : categoryId.charAt(0).toUpperCase() + categoryId.slice(1) };
 
                     const sectionId = `section-${categoryId}`;
                     sections.push({
@@ -1844,7 +2028,7 @@ IMPORTANT:
               setGeneratedPages(cachedData.generated_pages);
               setCurrentPageId(cachedStructure.pages.length > 0 ? cachedStructure.pages[0].id : undefined);
               setIsLoading(false);
-              setEmbeddingError(false); 
+              setEmbeddingError(false);
               setLoadingMessage(undefined);
               cacheLoadedSuccessfully.current = true;
               return; // Exit if cache is successfully loaded
@@ -1879,11 +2063,11 @@ IMPORTANT:
   useEffect(() => {
     const saveCache = async () => {
       if (!isLoading &&
-          !error &&
-          wikiStructure &&
-          Object.keys(generatedPages).length > 0 &&
-          Object.keys(generatedPages).length >= wikiStructure.pages.length &&
-          !cacheLoadedSuccessfully.current) {
+        !error &&
+        wikiStructure &&
+        Object.keys(generatedPages).length > 0 &&
+        Object.keys(generatedPages).length >= wikiStructure.pages.length &&
+        !cacheLoadedSuccessfully.current) {
 
         const allPagesHaveContent = wikiStructure.pages.every(page =>
           generatedPages[page.id] && generatedPages[page.id].content && generatedPages[page.id].content !== 'Loading...');
@@ -1905,7 +2089,8 @@ IMPORTANT:
               wiki_structure: structureToCache,
               generated_pages: generatedPages,
               provider: selectedProviderState,
-              model: selectedModelState
+              model: selectedModelState,
+              report_type: reportType
             };
             const response = await fetch(`/api/wiki_cache`, {
               method: 'POST',
@@ -1983,10 +2168,10 @@ IMPORTANT:
                   {language === 'ja'
                     ? `${wikiStructure.pages.length}ページ中${wikiStructure.pages.length - pagesInProgress.size}ページ完了`
                     : messages.repoPage?.pagesCompleted
-                        ? messages.repoPage.pagesCompleted
-                            .replace('{completed}', (wikiStructure.pages.length - pagesInProgress.size).toString())
-                            .replace('{total}', wikiStructure.pages.length.toString())
-                        : `${wikiStructure.pages.length - pagesInProgress.size} of ${wikiStructure.pages.length} pages completed`}
+                      ? messages.repoPage.pagesCompleted
+                        .replace('{completed}', (wikiStructure.pages.length - pagesInProgress.size).toString())
+                        .replace('{total}', wikiStructure.pages.length.toString())
+                      : `${wikiStructure.pages.length - pagesInProgress.size} of ${wikiStructure.pages.length} pages completed`}
                 </p>
 
                 {/* Show list of in-progress pages */}
@@ -2005,8 +2190,8 @@ IMPORTANT:
                           {language === 'ja'
                             ? `...他に${pagesInProgress.size - 3}ページ`
                             : messages.repoPage?.andMorePages
-                                ? messages.repoPage.andMorePages.replace('{count}', (pagesInProgress.size - 3).toString())
-                                : `...and ${pagesInProgress.size - 3} more`}
+                              ? messages.repoPage.andMorePages.replace('{count}', (pagesInProgress.size - 3).toString())
+                              : `...and ${pagesInProgress.size - 3} more`}
                         </li>
                       )}
                     </ul>
@@ -2112,6 +2297,14 @@ IMPORTANT:
                     >
                       <FaDownload className="mr-2" />
                       {messages.repoPage?.exportAsMarkdown || 'Export as Markdown'}
+                    </button>
+                    <button
+                      onClick={downloadPdf}
+                      disabled={isExporting}
+                      className="flex items-center text-xs px-3 py-2 bg-[var(--background)] text-[var(--foreground)] rounded-md hover:bg-[var(--background)]/80 disabled:opacity-50 disabled:cursor-not-allowed border border-[var(--border-color)] transition-colors"
+                    >
+                      <FaFileExport className="mr-2" />
+                      {messages.repoPage?.exportAsPdf || 'Download PDF'}
                     </button>
                     <button
                       onClick={() => exportWiki('json')}
@@ -2239,6 +2432,10 @@ IMPORTANT:
               customModel={customSelectedModelState}
               language={language}
               onRef={(ref) => (askComponentRef.current = ref)}
+              wikiContext={Object.values(generatedPages)
+                .filter(page => page.content && page.content !== 'Loading...')
+                .map(page => `# ${page.title}\n\n${page.content}`)
+                .join('\n\n---\n\n')}
             />
           </div>
         </div>

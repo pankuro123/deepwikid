@@ -7,6 +7,7 @@ interface ApiProcessedProject {
   repo: string;
   name: string;
   repo_type: string;
+  report_type: string;
   submittedAt: number;
   language: string;
 }
@@ -16,6 +17,7 @@ interface DeleteProjectCachePayload {
   repo: string;
   repo_type: string;
   language: string;
+  report_type: string;
 }
 
 /** Type guard to validate DeleteProjectCachePayload at runtime */
@@ -26,7 +28,8 @@ function isDeleteProjectCachePayload(obj: unknown): obj is DeleteProjectCachePay
     'owner' in obj && typeof (obj as Record<string, unknown>).owner === 'string' && ((obj as Record<string, unknown>).owner as string).trim() !== '' &&
     'repo' in obj && typeof (obj as Record<string, unknown>).repo === 'string' && ((obj as Record<string, unknown>).repo as string).trim() !== '' &&
     'repo_type' in obj && typeof (obj as Record<string, unknown>).repo_type === 'string' && ((obj as Record<string, unknown>).repo_type as string).trim() !== '' &&
-    'language' in obj && typeof (obj as Record<string, unknown>).language === 'string' && ((obj as Record<string, unknown>).language as string).trim() !== ''
+    'language' in obj && typeof (obj as Record<string, unknown>).language === 'string' && ((obj as Record<string, unknown>).language as string).trim() !== '' &&
+    'report_type' in obj && typeof (obj as Record<string, unknown>).report_type === 'string' && ((obj as Record<string, unknown>).report_type as string).trim() !== ''
   );
 }
 
@@ -77,12 +80,12 @@ export async function DELETE(request: Request) {
     const body: unknown = await request.json();
     if (!isDeleteProjectCachePayload(body)) {
       return NextResponse.json(
-        { error: 'Invalid request body: owner, repo, repo_type, and language are required and must be non-empty strings.' },
+        { error: 'Invalid request body: owner, repo, repo_type, language, and report_type are required and must be non-empty strings.' },
         { status: 400 }
       );
     }
-    const { owner, repo, repo_type, language } = body;
-    const params = new URLSearchParams({ owner, repo, repo_type, language });
+    const { owner, repo, repo_type, language, report_type } = body;
+    const params = new URLSearchParams({ owner, repo, repo_type, language, report_type });
     const response = await fetch(`${CACHE_API_ENDPOINT}?${params}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -91,7 +94,7 @@ export async function DELETE(request: Request) {
       let errorBody = { error: response.statusText };
       try {
         errorBody = await response.json();
-      } catch {}
+      } catch { }
       console.error(`Error deleting project cache (${CACHE_API_ENDPOINT}): ${response.status} - ${JSON.stringify(errorBody)}`);
       return NextResponse.json(errorBody, { status: response.status });
     }

@@ -1,9 +1,9 @@
 'use client';
 
-import React, {useEffect, useState} from 'react';
-import {useLanguage} from '@/contexts/LanguageContext';
+import React, { useEffect, useState } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import UserSelector from './UserSelector';
-import WikiTypeSelector from './WikiTypeSelector';
+// import WikiTypeSelector from './WikiTypeSelector';
 import TokenInput from './TokenInput';
 
 interface ModelSelectionModalProps {
@@ -34,7 +34,7 @@ interface ModelSelectionModalProps {
   setIncludedFiles?: (value: string) => void;
   showFileFilters?: boolean;
   showWikiType: boolean;
-  
+
   // Token input for refresh
   showTokenInput?: boolean;
   repositoryType?: 'github' | 'gitlab' | 'bitbucket';
@@ -72,6 +72,7 @@ export default function ModelSelectionModal({
   authCode = '',
   setAuthCode,
   isAuthLoading,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   showWikiType = true,
   showTokenInput = false,
   repositoryType = 'github',
@@ -88,7 +89,7 @@ export default function ModelSelectionModal({
   const [localExcludedFiles, setLocalExcludedFiles] = useState(excludedFiles);
   const [localIncludedDirs, setLocalIncludedDirs] = useState(includedDirs);
   const [localIncludedFiles, setLocalIncludedFiles] = useState(includedFiles);
-  
+
   // Token input state
   const [localAccessToken, setLocalAccessToken] = useState('');
   const [localSelectedPlatform, setLocalSelectedPlatform] = useState<'github' | 'gitlab' | 'bitbucket'>(repositoryType);
@@ -123,7 +124,7 @@ export default function ModelSelectionModal({
     if (setExcludedFiles) setExcludedFiles(localExcludedFiles);
     if (setIncludedDirs) setIncludedDirs(localIncludedDirs);
     if (setIncludedFiles) setIncludedFiles(localIncludedFiles);
-    
+
     // Pass token to onApply if needed
     if (showTokenInput) {
       onApply(localAccessToken);
@@ -157,13 +158,7 @@ export default function ModelSelectionModal({
 
           {/* Modal body */}
           <div className="p-6">
-            {/* Wiki Type Selector */}
-            {
-              showWikiType && <WikiTypeSelector
-                    isComprehensiveView={localIsComprehensiveView}
-                    setIsComprehensiveView={setLocalIsComprehensiveView}
-                />
-            }
+            {/* Wiki Type Selector removed because component no longer exists */}
 
             {/* Divider */}
             <div className="my-4 border-t border-[var(--border-color)]/30"></div>
@@ -206,32 +201,32 @@ export default function ModelSelectionModal({
             )}
             {/* Authorization Code Input */}
             {isAuthLoading && (
-                <div className="mb-4 p-3 bg-[var(--background)]/50 rounded-md border border-[var(--border-color)] text-sm text-[var(--muted)]">
-                  Loading authentication status...
-                </div>
+              <div className="mb-4 p-3 bg-[var(--background)]/50 rounded-md border border-[var(--border-color)] text-sm text-[var(--muted)]">
+                Loading authentication status...
+              </div>
             )}
             {!isAuthLoading && authRequired && (
-                <div className="mb-4 p-4 bg-[var(--background)]/50 rounded-md border border-[var(--border-color)]">
-                  <label htmlFor="authCode" className="block text-sm font-medium text-[var(--foreground)] mb-2">
-                    {t.form?.authorizationCode || 'Authorization Code'}
-                  </label>
-                  <input
-                      type="password"
-                      id="authCode"
-                      value={authCode || ''}
-                      onChange={(e) => setAuthCode?.(e.target.value)}
-                      className="input-japanese block w-full px-3 py-2 text-sm rounded-md bg-transparent text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-primary)]"
-                      placeholder="Enter your authorization code"
-                  />
-                  <div className="flex items-center mt-2 text-xs text-[var(--muted)]">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-[var(--muted)]"
-                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {t.form?.authorizationRequired || 'Authentication is required to generate the wiki.'}
-                  </div>
+              <div className="mb-4 p-4 bg-[var(--background)]/50 rounded-md border border-[var(--border-color)]">
+                <label htmlFor="authCode" className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                  {t.form?.authorizationCode || 'Authorization Code'}
+                </label>
+                <input
+                  type="password"
+                  id="authCode"
+                  value={authCode || ''}
+                  onChange={(e) => setAuthCode?.(e.target.value)}
+                  className="input-japanese block w-full px-3 py-2 text-sm rounded-md bg-transparent text-[var(--foreground)] focus:outline-none focus:border-[var(--accent-primary)]"
+                  placeholder="Enter your authorization code"
+                />
+                <div className="flex items-center mt-2 text-xs text-[var(--muted)]">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-[var(--muted)]"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {t.form?.authorizationRequired || 'Authentication is required to generate the wiki.'}
                 </div>
+              </div>
             )}
           </div>
 

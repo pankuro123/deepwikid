@@ -81,7 +81,12 @@
     "hideDefault": "Ẩn mặc định",
     "viewDefault": "Xem mặc định",
     "authorizationCode": "Mã xác thực",
-    "authorizationRequired": "Mã xác thực cần thiết để tạo Wiki"
+    "authorizationRequired": "Mã xác thực cần thiết để tạo Wiki",
+    "reportType": "Report Type",
+    "technical": "Technical",
+    "functional": "Functional (FEX)",
+    "technicalDescription": "Standard technical documentation",
+    "functionalDescription": "Business analyst requirement document"
   },
   "footer": {
     "copyright": "DeepWiki - Tài liệu hỗ trợ bởi AI cho repository"

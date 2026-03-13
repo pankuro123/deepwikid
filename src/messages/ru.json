@@ -90,7 +90,12 @@
     "excludeModeDescription": "Укажите пути, которые нужно исключить из обработки (поведение по умолчанию)",
     "includeModeDescription": "Укажите только те пути, которые нужно включить, игнорируя остальные",
     "authorizationCode": "Код авторизации",
-    "authorizationRequired": "Для генерации Wiki требуется авторизация."
+    "authorizationRequired": "Для генерации Wiki требуется авторизация.",
+    "reportType": "Report Type",
+    "technical": "Technical",
+    "functional": "Functional (FEX)",
+    "technicalDescription": "Standard technical documentation",
+    "functionalDescription": "Business analyst requirement document"
   },
   "footer": {
     "copyright": "DeepWiki — документация с поддержкой ИИ для репозиториев кода"

@@ -81,7 +81,12 @@
     "hideDefault": "デフォルトを隠す",
     "viewDefault": "デフォルトを表示",
     "authorizationCode": "認証コード",
-    "authorizationRequired": "Wiki生成には認証コードが必要です"
+    "authorizationRequired": "Wiki生成には認証コードが必要です",
+    "reportType": "Report Type",
+    "technical": "Technical",
+    "functional": "Functional (FEX)",
+    "technicalDescription": "Standard technical documentation",
+    "functionalDescription": "Business analyst requirement document"
   },
   "footer": {
     "copyright": "DeepWiki - コードリポジトリのためのAI駆動ドキュメンテーション"
