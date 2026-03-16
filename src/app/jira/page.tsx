@@ -94,38 +94,58 @@ export default function JiraPage() {
 
   // Helper to neatly render clusters
   const renderCluster = (cluster: any, index: number) => {
-    const clusterName = cluster.cluster_name || cluster.name || cluster.title || `Cluster ${index + 1}`;
-    const description = cluster.description || cluster.summary || '';
-    const items = cluster.requirements || cluster.items || cluster.tickets || [];
+    // Handle cases where cluster might be an entry from an object or a direct object
+    const clusterData = cluster;
+    const clusterName = clusterData.functional_area || clusterData.cluster_name || clusterData.name || clusterData.title || `Requirement Group ${index + 1}`;
+    const description = clusterData.summary || clusterData.description || '';
+    const items = clusterData.requirements || clusterData.items || clusterData.tickets || [];
     
     return (
-      <div key={index} className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-sm mb-6 overflow-hidden">
-        <div className="bg-[var(--accent-primary)]/10 px-6 py-4 border-b border-[var(--border-color)]">
-          <h3 className="text-lg font-bold text-[var(--foreground)] flex items-center gap-2">
-            <FaListAlt className="text-[var(--accent-primary)]" />
-            {clusterName}
-          </h3>
-          {description && (
-            <p className="mt-2 text-sm text-[var(--muted)]">{description}</p>
-          )}
+      <div key={index} className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-sm mb-6 overflow-hidden transition-all hover:shadow-md">
+        <div className="bg-[var(--accent-primary)]/5 px-6 py-5 border-b border-[var(--border-color)]">
+          <div className="flex items-start gap-4">
+            <div className="bg-[var(--accent-primary)]/10 p-2 rounded-lg mt-1">
+              <FaListAlt className="text-[var(--accent-primary)] text-lg" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-[var(--foreground)] font-serif leading-tight">
+                {clusterName}
+              </h3>
+              {description && (
+                <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed italic">
+                  {description}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
         
-        <div className="p-6">
+        <div className="p-6 bg-[var(--background)]/30">
           {Array.isArray(items) && items.length > 0 ? (
-            <ul className="list-disc list-inside space-y-2 placeholder-items">
-              {items.map((item, idx) => renderRequirement(item, idx))}
-            </ul>
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-[var(--accent-primary)] uppercase tracking-widest mb-2 opacity-70">Requirements & Specs</h4>
+              <ul className="space-y-3">
+                {items.map((item, idx) => (
+                  <li key={idx} className="flex gap-3 group">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] mt-1.5 flex-shrink-0 group-hover:scale-125 transition-transform" />
+                    <div className="text-sm text-[var(--foreground)] leading-relaxed">
+                      {typeof item === 'string' ? item : JSON.stringify(item)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : (
-            <p className="text-sm text-[var(--muted)] italic">No specific items documented for this cluster.</p>
+            <p className="text-sm text-[var(--muted)] italic">No specific sub-requirements documented for this area.</p>
           )}
           
           {/* Render any additional fields at the top level of the cluster if they exist */}
-          {Object.entries(cluster).map(([key, value]) => {
-            if (!['cluster_name', 'name', 'title', 'description', 'summary', 'requirements', 'items', 'tickets'].includes(key)) {
+          {Object.entries(clusterData).map(([key, value]) => {
+            if (!['functional_area', 'cluster_name', 'name', 'title', 'description', 'summary', 'requirements', 'items', 'tickets'].includes(key)) {
               return (
-                 <div key={key} className="mt-4 pt-4 border-t border-[var(--border-color)]">
-                   <h4 className="text-xs font-semibold text-[var(--accent-primary)] uppercase tracking-wider mb-2">{key.replace(/_/g, ' ')}</h4>
-                   <div className="text-sm text-[var(--foreground)] bg-[var(--background)]/50 p-3 rounded">
+                 <div key={key} className="mt-6 pt-4 border-t border-[var(--border-color)]/50">
+                   <h4 className="text-xs font-bold text-[var(--accent-primary)] uppercase tracking-widest mb-2 opacity-70">{key.replace(/_/g, ' ')}</h4>
+                   <div className="text-sm text-[var(--foreground)] bg-[var(--card-bg)]/50 p-4 rounded-lg border border-[var(--border-color)] shadow-inner">
                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
                    </div>
                  </div>
@@ -141,21 +161,36 @@ export default function JiraPage() {
   const renderResults = () => {
     if (!results) return null;
 
-    // Check if the overall structure is an array
-    const clusters = Array.isArray(results) ? results : 
-                    Array.isArray(results.clusters) ? results.clusters : 
-                    Array.isArray(results.data) ? results.data :
-                    [results];
+    // Check if the overall structure is an array or object of clusters
+    let clustersArray: any[] = [];
+    
+    const rawClusters = results.clusters || results.data || results;
+    
+    if (Array.isArray(rawClusters)) {
+      clustersArray = rawClusters;
+    } else if (typeof rawClusters === 'object' && rawClusters !== null) {
+      // Handle the format with numeric keys {"0": {...}, "1": {...}}
+      clustersArray = Object.values(rawClusters);
+    } else {
+      clustersArray = [rawClusters];
+    }
 
     return (
-      <div className="mt-10 animate-fade-in w-full max-w-4xl mx-auto">
-        <div className="flex items-center gap-3 mb-8 pb-4 border-b border-[var(--border-color)]">
-          <FaCheckCircle className="text-2xl text-green-500" />
-          <h2 className="text-2xl font-bold font-serif text-[var(--foreground)]">Consolidated Requirements</h2>
+      <div className="mt-12 animate-fade-in w-full max-w-4xl mx-auto px-4 pb-20">
+        <div className="flex items-center justify-between mb-8 pb-4 border-b border-[var(--border-color)]">
+          <div className="flex items-center gap-4">
+            <div className="bg-green-500/10 p-2 rounded-full">
+              <FaCheckCircle className="text-2xl text-green-500" />
+            </div>
+            <h2 className="text-2xl font-bold font-serif text-[var(--foreground)]">Consolidated Requirements</h2>
+          </div>
+          <div className="text-xs text-[var(--muted)] bg-[var(--background)] px-3 py-1 rounded-full border border-[var(--border-color)]">
+            {clustersArray.length} Cluster{clustersArray.length !== 1 ? 's' : ''} Detected
+          </div>
         </div>
         
-        <div className="space-y-6">
-          {clusters.map((cluster, idx) => renderCluster(cluster, idx))}
+        <div className="space-y-8">
+          {clustersArray.map((cluster, idx) => renderCluster(cluster, idx))}
         </div>
       </div>
     );
