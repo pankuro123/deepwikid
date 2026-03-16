@@ -92,24 +92,97 @@ export default function JiraPage() {
     );
   };
 
-  // Helper function to clean text from JSON artifacts
-  const formatText = (val: any): string => {
+  // Helper function to clean text from quotes and braces
+  const cleanString = (val: any): string => {
     if (val === null || val === undefined) return '';
-    if (typeof val === 'object') {
-      // If it's an object, let's try to extract meaningful text or join keys/values
-      return Object.entries(val)
-        .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${formatText(v)}`)
-        .join(', ');
+    return String(val).replace(/[{}[\]"]/g, '').trim();
+  };
+
+  // Helper to render a structured requirement item
+  const renderRequirementDetail = (item: any) => {
+    // If it's a string, try to parse it as JSON first (just in case)
+    let data = item;
+    if (typeof item === 'string' && (item.trim().startsWith('{') || item.trim().startsWith('['))) {
+      try {
+        data = JSON.parse(item);
+      } catch (e) {
+        // Not valid JSON, just clean the string
+        return <div className="text-sm leading-relaxed">{cleanString(item)}</div>;
+      }
     }
-    // Remove { } and other JSON artifacts if they accidentally leaked in as strings
-    return String(val).replace(/[{}]/g, '').trim();
+
+    if (typeof data !== 'object' || data === null) {
+      return <div className="text-sm leading-relaxed">{cleanString(data)}</div>;
+    }
+
+    // Extract common fields
+    const id = data.id || data.ID || data.code;
+    const type = data.type || data.category;
+    const priority = data.priority || data.level;
+    const reqText = data.requirement || data.description || data.text || data.summary;
+    const rationale = data.rationale || data.reasoning || data.why;
+
+    // Remaining fields that aren't the primary ones
+    const extraFields = Object.entries(data).filter(([k]) => 
+      !['id', 'ID', 'code', 'type', 'category', 'priority', 'level', 'requirement', 'description', 'text', 'summary', 'rationale', 'reasoning', 'why'].includes(k)
+    );
+
+    return (
+      <div className="flex flex-col gap-3 py-1">
+        <div className="flex flex-wrap items-center gap-2">
+          {id && (
+            <span className="font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-2 py-0.5 rounded text-xs border border-[var(--accent-primary)]/20">
+              {cleanString(id)}
+            </span>
+          )}
+          {type && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">
+              {cleanString(type)}
+            </span>
+          )}
+          {priority && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+              String(priority).toLowerCase().includes('must') 
+                ? 'bg-red-500/10 text-red-600 border-red-500/20' 
+                : 'bg-orange-500/10 text-orange-600 border-orange-500/20'
+            }`}>
+              {cleanString(priority)}
+            </span>
+          )}
+        </div>
+
+        {reqText && (
+          <p className="text-[var(--foreground)] font-medium text-sm leading-relaxed">
+            {cleanString(reqText)}
+          </p>
+        )}
+
+        {rationale && (
+          <div className="text-xs text-[var(--muted)] bg-[var(--background)]/50 p-3 rounded-lg border border-[var(--border-color)] mt-1">
+            <span className="font-bold text-[var(--accent-primary)] mr-2">Rationale:</span>
+            {cleanString(rationale)}
+          </div>
+        )}
+
+        {extraFields.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 mt-1">
+            {extraFields.map(([k, v]) => (
+              <div key={k} className="text-[11px]">
+                <span className="font-bold text-[var(--muted)] uppercase mr-1">{k.replace(/_/g, ' ')}:</span>
+                <span className="text-[var(--foreground)]">{cleanString(v)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Helper to neatly render clusters
   const renderCluster = (cluster: any, index: number) => {
     const clusterData = cluster;
-    const clusterName = formatText(clusterData.functional_area || clusterData.cluster_name || clusterData.name || clusterData.title || `Requirement Group ${index + 1}`);
-    const description = formatText(clusterData.summary || clusterData.description || '');
+    const clusterName = cleanString(clusterData.functional_area || clusterData.cluster_name || clusterData.name || clusterData.title || `Requirement Group ${index + 1}`);
+    const description = cleanString(clusterData.summary || clusterData.description || '');
     const items = clusterData.requirements || clusterData.items || clusterData.tickets || [];
     
     return (
@@ -145,9 +218,9 @@ export default function JiraPage() {
                 <tbody className="divide-y divide-[var(--border-color)]">
                   {items.map((item, idx) => (
                     <tr key={idx} className="hover:bg-[var(--accent-primary)]/[0.02] transition-colors">
-                      <td className="px-6 py-4 text-sm font-mono text-[var(--muted)] align-top">{idx + 1}</td>
+                      <td className="px-6 py-4 text-sm font-mono text-[var(--muted)] align-top pt-6">{idx + 1}</td>
                       <td className="px-6 py-4 text-sm text-[var(--foreground)] leading-relaxed whitespace-pre-wrap">
-                        {formatText(item)}
+                        {renderRequirementDetail(item)}
                       </td>
                     </tr>
                   ))}
@@ -167,7 +240,7 @@ export default function JiraPage() {
                  <div key={key} className="mt-8 pt-6 border-t border-[var(--border-color)]/30">
                    <h4 className="text-xs font-bold text-[var(--accent-primary)] uppercase tracking-widest mb-3 opacity-70">{key.replace(/_/g, ' ')}</h4>
                    <div className="text-sm text-[var(--foreground)] leading-relaxed">
-                     {formatText(value)}
+                     {cleanString(value)}
                    </div>
                  </div>
               );
