@@ -44,7 +44,7 @@ OPENAI_BASE_URL=https://custom-api-endpoint.com/v1  # Optional, for custom OpenA
 OLLAMA_HOST=https://your_ollama_host"  # Optional: Add Ollama host if not local. default: http://localhost:11434
 
 # Server Configuration
-PORT=8001  # Optional, defaults to 8001
+PORT=8011  # Optional, defaults to 8011
 ```
 
 If you're not using Ollama mode, you need to configure an OpenAI API key for embeddings. Other API keys are only required when configuring and using models from the corresponding providers.
@@ -113,7 +113,7 @@ This allows you to maintain different configurations for various environments or
 python -m api.main
 ```
 
-The API will be available at `http://localhost:8001`
+The API will be available at `http://localhost:8011`
 
 ## 🧠 How It Works
 
@@ -167,7 +167,7 @@ A streaming response with the generated text.
 import requests
 
 # API endpoint
-url = "http://localhost:8001/chat/completions/stream"
+url = "http://localhost:8011/chat/completions/stream"
 
 # Request data
 payload = {

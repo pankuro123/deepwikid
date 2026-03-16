@@ -4,14 +4,14 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "${PORT:-8001}:${PORT:-8001}"  # API port
+      - "${PORT:-8011}:${PORT:-8011}"  # API port
       - "3000:3000"  # Next.js port
     env_file:
       - .env
     environment:
-      - PORT=${PORT:-8001}
+      - PORT=${PORT:-8011}
       - NODE_ENV=production
-      - SERVER_BASE_URL=http://localhost:${PORT:-8001}
+      - SERVER_BASE_URL=http://localhost:${PORT:-8011}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FILE_PATH=${LOG_FILE_PATH:-api/logs/application.log}
     volumes:
@@ -22,7 +22,7 @@ services:
     mem_reservation: 2g
     # Health check configuration
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8001}/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8011}/health"]
       interval: 60s
       timeout: 10s
       retries: 3

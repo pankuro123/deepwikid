@@ -173,8 +173,8 @@ deepwiki/
 | `GOOGLE_API_KEY` | AI 생성용 Google Gemini API 키 | 예 |
 | `OPENAI_API_KEY` | 임베딩용 OpenAI API 키 | 예 |
 | `OPENROUTER_API_KEY` | 대체 모델용 OpenRouter API 키 | 아니오 | OpenRouter 모델 사용 시 필요 |
-| `PORT` | API 서버 포트 (기본값: 8001) | 아니오 | API와 프론트엔드를 같은 머신에서 호스팅 시 `SERVER_BASE_URL`의 포트도 변경 필요 |
-| `SERVER_BASE_URL` | API 서버 기본 URL (기본값: http://localhost:8001) | 아니오 |
+| `PORT` | API 서버 포트 (기본값: 8011\) | 아니오 | API와 프론트엔드를 같은 머신에서 호스팅 시 `SERVER_BASE_URL`의 포트도 변경 필요 |
+| `SERVER_BASE_URL` | API 서버 기본 URL (기본값: http://localhost:8011) | 아니오 |
 
 ### 설정 파일
 
@@ -205,7 +205,7 @@ Docker를 사용하여 DeepWiki를 실행할 수 있습니다:
 docker pull ghcr.io/asyncfuncai/deepwiki-open:latest
 
 # 환경 변수와 함께 컨테이너 실행
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -240,7 +240,7 @@ echo "OPENAI_API_KEY=your_openai_api_key" >> .env
 echo "OPENROUTER_API_KEY=your_openrouter_api_key" >> .env
 
 # .env 파일을 마운트하여 컨테이너 실행
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -v $(pwd)/.env:/app/.env \
   -v ~/.adalflow:/root/.adalflow \
   ghcr.io/asyncfuncai/deepwiki-open:latest
@@ -266,7 +266,7 @@ cd deepwiki-open
 docker build -t deepwiki-open .
 
 # 컨테이너 실행
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -399,7 +399,7 @@ DeepResearch를 사용하려면 질문 제출 전 Ask 인터페이스에서 "Dee
 - **"OpenRouter API 오류"**: OpenRouter API 키가 유효하고 충분한 크레딧이 있는지 확인
 
 ### 연결 문제
-- **"API 서버에 연결할 수 없음"**: API 서버가 포트 8001에서 실행 중인지 확인
+- **"API 서버에 연결할 수 없음"**: API 서버가 포트 8011에서 실행 중인지 확인
 - **"CORS 오류"**: API가 모든 출처를 허용하도록 설정되어 있지만 문제가 있으면 프론트엔드와 백엔드를 같은 머신에서 실행해 보세요
 
 ### 생성 문제

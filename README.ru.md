@@ -308,8 +308,8 @@ docker-compose up
 | `AZURE_OPENAI_ENDPOINT`  | Endpoint Azure                                                         | Нет         | Только если используете Azure                                                                 |
 | `AZURE_OPENAI_VERSION`   | Версия API Azure                                                       | Нет         | Только если используете Azure                                                                 |
 | `OLLAMA_HOST`            | Хост Ollama (по умолчанию http://localhost:11434)                      | Нет         | Указывается при использовании внешнего сервера Ollama                                         |
-| `PORT`                   | Порт API-сервера (по умолчанию 8001)                                   | Нет         | Меняйте, если frontend и backend работают на одной машине                                     |
-| `SERVER_BASE_URL`        | Базовый URL для API (по умолчанию http://localhost:8001)               | Нет         |                                                                                               |
+| `PORT`                   | Порт API-сервера (по умолчанию 8011\)                                   | Нет         | Меняйте, если frontend и backend работают на одной машине                                     |
+| `SERVER_BASE_URL`        | Базовый URL для API (по умолчанию http://localhost:8011)               | Нет         |                                                                                               |
 | `DEEPWIKI_AUTH_MODE`     | Включает режим авторизации (true или 1)                                | Нет         | Если включён, потребуется код из `DEEPWIKI_AUTH_CODE`                                         |
 | `DEEPWIKI_AUTH_CODE`     | Секретный код для запуска генерации                                    | Нет         | Только если включён режим авторизации                                                         |
 
@@ -335,7 +335,7 @@ DeepWiki может быть запущен в режиме авторизаци
 ```bash
 docker pull ghcr.io/asyncfuncai/deepwiki-open:latest
 
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=... \
   -e OPENAI_API_KEY=... \
   -e OPENROUTER_API_KEY=... \
@@ -365,7 +365,7 @@ docker-compose up
 ```bash
 echo "GOOGLE_API_KEY=..." > .env
 ...
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -v $(pwd)/.env:/app/.env \
   -v ~/.adalflow:/root/.adalflow \
   ghcr.io/asyncfuncai/deepwiki-open:latest
@@ -379,7 +379,7 @@ cd deepwiki-open
 
 docker build -t deepwiki-open .
 
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=... \
   -e OPENAI_API_KEY=... \
   ... \
@@ -476,7 +476,7 @@ docker build --build-arg CUSTOM_CERT_DIR=certs .
 
 ### Проблемы с подключением
 
-- **“Нет подключения к API”** — убедитесь, что сервер запущен на 8001
+- **“Нет подключения к API”** — убедитесь, что сервер запущен на 8011
 - **“CORS ошибка”** — пробуйте запускать frontend и backend на одной машине
 
 ### Ошибки генерации

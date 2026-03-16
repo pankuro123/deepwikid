@@ -319,8 +319,8 @@ docker-compose up
 | `AZURE_OPENAI_ENDPOINT` | Point de terminaison Azure OpenAI                               | Non        | Requis uniquement si vous souhaitez utiliser les modèles Azure OpenAI                                    |
 | `AZURE_OPENAI_VERSION`  | Version Azure OpenAI                                            | Non        | Requis uniquement si vous souhaitez utiliser les modèles Azure OpenAI                                    |
 | `OLLAMA_HOST`           | Hôte Ollama (par défaut : http://localhost:11434)               | Non        | Requis uniquement si vous souhaitez utiliser un serveur Ollama externe                                   |
-| `PORT`                  | Port du serveur API (par défaut : 8001)                         | Non        | Si vous hébergez l'API et le frontend sur la même machine, assurez-vous de modifier le port de `SERVER_BASE_URL` en conséquence |
-| `SERVER_BASE_URL`       | URL de base du serveur API (par défaut : http://localhost:8001) | Non        |                                                                                                           |
+| `PORT`                  | Port du serveur API (par défaut : 8011\)                         | Non        | Si vous hébergez l'API et le frontend sur la même machine, assurez-vous de modifier le port de `SERVER_BASE_URL` en conséquence |
+| `SERVER_BASE_URL`       | URL de base du serveur API (par défaut : http://localhost:8011) | Non        |                                                                                                           |
 | `DEEPWIKI_AUTH_MODE`    | Définir sur `true` ou `1` pour activer le mode verrouillé        | Non        | La valeur par défaut est `false`. Si activé, `DEEPWIKI_AUTH_CODE` est requis.                             |
 | `DEEPWIKI_AUTH_CODE`    | Le code requis pour la génération de wiki lorsque `DEEPWIKI_AUTH_MODE` est activé. | Non        | Utilisé uniquement si `DEEPWIKI_AUTH_MODE` est `true` ou `1`.                          |
 
@@ -349,7 +349,7 @@ Vous pouvez utiliser Docker pour exécuter DeepWiki :
 docker pull ghcr.io/asyncfuncai/deepwiki-open:latest
 
 # Exécuter le conteneur avec les variables d'environnement
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=votre_clé_google \
   -e OPENAI_API_KEY=votre_clé_openai \
   -e OPENROUTER_API_KEY=votre_clé_openrouter \
@@ -393,7 +393,7 @@ echo "AZURE_OPENAI_VERSION=votre_version_azure_openai"  >> .env
 echo "OLLAMA_HOST=votre_hôte_ollama" >> .env
 
 # Run the container with the .env file mounted
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -v $(pwd)/.env:/app/.env \
   -v ~/.adalflow:/root/.adalflow \
   ghcr.io/asyncfuncai/deepwiki-open:latest
@@ -419,7 +419,7 @@ cd deepwiki-open
 docker build -t deepwiki-open .
 
 # Run the container
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=votre_clé_google \
   -e OPENAI_API_KEY=votre_clé_openai \
   -e OPENROUTER_API_KEY=votre_clé_openrouter \
@@ -530,7 +530,7 @@ Pour utiliser DeepResearch, activez simplement le commutateur "Deep Research" da
 
 ### Problèmes de connexion
 
-- **"Impossible de se connecter au serveur API"** : assurez-vous que le serveur API est en cours d'exécution sur le port 8001.
+- **"Impossible de se connecter au serveur API"** : assurez-vous que le serveur API est en cours d'exécution sur le port 8011.
 - **"Erreur CORS"** : l'API est configurée pour autoriser toutes les origines, mais si vous rencontrez des problèmes, essayez d'exécuter le frontend et le backend sur la même machine.
 
 ### Problèmes de génération

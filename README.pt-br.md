@@ -301,8 +301,8 @@ docker-compose up
 | `OPENAI_API_KEY`     | Chave API OpenAI para embeddings                                | Sim | Nota: Isso é necessário mesmo se você não estiver usando modelos OpenAI, pois é usado para embeddings.              |
 | `OPENROUTER_API_KEY` | Chave API OpenRouter para modelos alternativos                    | Não | Necessária apenas se você quiser usar modelos OpenRouter                                                       |
 | `OLLAMA_HOST`        | Host Ollama (padrão: http://localhost:11434)                | Não | Necessária apenas se você quiser usar servidor Ollama externo                                                  |
-| `PORT`               | Porta para o servidor API (padrão: 8001)                      | Não | Se você hospedar API e frontend na mesma máquina, certifique-se de alterar a porta de `SERVER_BASE_URL` de acordo |
-| `SERVER_BASE_URL`    | URL base para o servidor API (padrão: http://localhost:8001) | Não |
+| `PORT`               | Porta para o servidor API (padrão: 8011\)                      | Não | Se você hospedar API e frontend na mesma máquina, certifique-se de alterar a porta de `SERVER_BASE_URL` de acordo |
+| `SERVER_BASE_URL`    | URL base para o servidor API (padrão: http://localhost:8011) | Não |
 | `DEEPWIKI_AUTH_MODE` | Defina como `true` ou `1` para habilitar o modo de autorização. | Não | Padrão é `false`. Se habilitado, `DEEPWIKI_AUTH_CODE` é necessário. |
 | `DEEPWIKI_AUTH_CODE` | O código secreto necessário para geração de wiki quando `DEEPWIKI_AUTH_MODE` está habilitado. | Não | Usado apenas se `DEEPWIKI_AUTH_MODE` for `true` ou `1`. |
 
@@ -329,7 +329,7 @@ Você pode usar Docker para executar o DeepWiki:
 docker pull ghcr.io/asyncfuncai/deepwiki-open:latest
 
 # Execute o container com variáveis de ambiente
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=sua_chave_api_google \
   -e OPENAI_API_KEY=sua_chave_api_openai \
   -e OPENROUTER_API_KEY=sua_chave_api_openrouter \
@@ -366,7 +366,7 @@ echo "OPENROUTER_API_KEY=sua_chave_api_openrouter" >> .env
 echo "OLLAMA_HOST=seu_host_ollama" >> .env
 
 # Execute o container com o arquivo .env montado
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -v $(pwd)/.env:/app/.env \
   -v ~/.adalflow:/root/.adalflow \
   ghcr.io/asyncfuncai/deepwiki-open:latest
@@ -391,7 +391,7 @@ cd deepwiki-open
 docker build -t deepwiki-open .
 
 # Execute o container
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=sua_chave_api_google \
   -e OPENAI_API_KEY=sua_chave_api_openai \
   -e OPENROUTER_API_KEY=sua_chave_api_openrouter \
@@ -480,7 +480,7 @@ Para usar o DeepResearch, simplesmente alterne o interruptor "Pesquisa Aprofunda
 - **"Erro de API OpenRouter"**: Verifique se sua chave API OpenRouter é válida e tem créditos suficientes
 
 ### Problemas de Conexão
-- **"Não é possível conectar ao servidor API"**: Certifique-se de que o servidor API está em execução na porta 8001
+- **"Não é possível conectar ao servidor API"**: Certifique-se de que o servidor API está em execução na porta 8011
 - **"Erro CORS"**: A API está configurada para permitir todas as origens, mas se você estiver tendo problemas, tente executar frontend e backend na mesma máquina
 
 ### Problemas de Geração

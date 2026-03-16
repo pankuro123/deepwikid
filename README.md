@@ -313,7 +313,7 @@ DEEPWIKI_EMBEDDER_TYPE=google
 **Option 2: Docker Environment**
 
 ```bash
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e DEEPWIKI_EMBEDDER_TYPE=google \
   -v ~/.adalflow:/root/.adalflow \
@@ -422,8 +422,8 @@ docker-compose up
 | `AZURE_OPENAI_VERSION` | Azure OpenAI version                     | No | Required only if you want to use Azure OpenAI models                                                       |
 | `OLLAMA_HOST`        | Ollama Host (default: http://localhost:11434)                | No | Required only if you want to use external Ollama server                                                  |
 | `DEEPWIKI_EMBEDDER_TYPE` | Embedder type: `openai`, `google`, `ollama`, or `bedrock` (default: `openai`) | No | Controls which embedding provider to use                                                              |
-| `PORT`               | Port for the API server (default: 8001)                      | No | If you host API and frontend on the same machine, make sure change port of `SERVER_BASE_URL` accordingly |
-| `SERVER_BASE_URL`    | Base URL for the API server (default: http://localhost:8001) | No |
+| `PORT`               | Port for the API server (default: 8011\)                      | No | If you host API and frontend on the same machine, make sure change port of `SERVER_BASE_URL` accordingly |
+| `SERVER_BASE_URL`    | Base URL for the API server (default: http://localhost:8011) | No |
 | `DEEPWIKI_AUTH_MODE` | Set to `true` or `1` to enable authorization mode. | No | Defaults to `false`. If enabled, `DEEPWIKI_AUTH_CODE` is required. |
 | `DEEPWIKI_AUTH_CODE` | The secret code required for wiki generation when `DEEPWIKI_AUTH_MODE` is enabled. | No | Only used if `DEEPWIKI_AUTH_MODE` is `true` or `1`. |
 
@@ -458,7 +458,7 @@ You can use Docker to run DeepWiki:
 docker pull ghcr.io/asyncfuncai/deepwiki-open:latest
 
 # Run the container with environment variables
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -502,7 +502,7 @@ echo "AZURE_OPENAI_VERSION=your_azure_openai_version"  >>.env
 echo "OLLAMA_HOST=your_ollama_host" >> .env
 
 # Run the container with the .env file mounted
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -v $(pwd)/.env:/app/.env \
   -v ~/.adalflow:/root/.adalflow \
   ghcr.io/asyncfuncai/deepwiki-open:latest
@@ -528,7 +528,7 @@ cd deepwiki-open
 docker build -t deepwiki-open .
 
 # Run the container
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -637,7 +637,7 @@ To use DeepResearch, simply toggle the "Deep Research" switch in the Ask interfa
 - **"Azure OpenAI API error"**: Verify your Azure OpenAI credentials (API key, endpoint, and version) are correct and the service is properly deployed
 
 ### Connection Problems
-- **"Cannot connect to API server"**: Make sure the API server is running on port 8001
+- **"Cannot connect to API server"**: Make sure the API server is running on port 8011
 - **"CORS error"**: The API is configured to allow all origins, but if you're having issues, try running both frontend and backend on the same machine
 
 ### Generation Issues

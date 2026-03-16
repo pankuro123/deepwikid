@@ -77,7 +77,7 @@ COPY --from=node_builder /app/.next/standalone ./
 COPY --from=node_builder /app/.next/static ./.next/static
 
 # Expose the port the app runs on
-EXPOSE ${PORT:-8001} 3000
+EXPOSE ${PORT:-8011} 3000
 
 # Create a script to run both backend and frontend
 RUN echo '#!/bin/bash\n\
@@ -94,15 +94,15 @@ if [ -z "$OPENAI_API_KEY" ] || [ -z "$GOOGLE_API_KEY" ]; then\n\
 fi\n\
 \n\
 # Start the API server in the background with the configured port\n\
-python -m api.main --port ${PORT:-8001} &\n\
+python -m api.main --port ${PORT:-8011} &\n\
 PORT=3000 HOSTNAME=0.0.0.0 node server.js &\n\
 wait -n\n\
 exit $?' > /app/start.sh && chmod +x /app/start.sh
 
 # Set environment variables
-ENV PORT=8001
+ENV PORT=8011
 ENV NODE_ENV=production
-ENV SERVER_BASE_URL=http://localhost:${PORT:-8001}
+ENV SERVER_BASE_URL=http://localhost:${PORT:-8011}
 
 # Create empty .env file (will be overridden if one exists at runtime)
 RUN touch .env

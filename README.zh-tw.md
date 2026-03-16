@@ -308,8 +308,8 @@ docker-compose up
 | `OPENAI_API_KEY`     | OpenAI API 金鑰，用於嵌入                                | 是 | 備註：即使您不使用 OpenAI 模型，這個也是必需的，因為它用於嵌入              |
 | `OPENROUTER_API_KEY` | OpenRouter API 金鑰，用於替代模型                    | 否 | 只有在您想使用 OpenRouter 模型時才需要                                                       |
 | `OLLAMA_HOST`        | Ollama 主機（預設：http://localhost:11434）                | 否 | 只有在您想使用外部 Ollama 伺服器時才需要                                                  |
-| `PORT`               | API 伺服器的連接埠（預設：8001）                      | 否 | 如果您在同一台機器上託管 API 和前端，請確保相應地變更 `SERVER_BASE_URL` 的連接埠 |
-| `SERVER_BASE_URL`    | API 伺服器的基礎 URL（預設：http://localhost:8001） | 否 |
+| `PORT`               | API 伺服器的連接埠（預設：8011）                      | 否 | 如果您在同一台機器上託管 API 和前端，請確保相應地變更 `SERVER_BASE_URL` 的連接埠 |
+| `SERVER_BASE_URL`    | API 伺服器的基礎 URL（預設：http://localhost:8011） | 否 |
 | `DEEPWIKI_AUTH_MODE` | 設定為 `true` 或 `1` 以啟用授權模式 | 否 | 預設為 `false`。如果啟用，則需要 `DEEPWIKI_AUTH_CODE` |
 | `DEEPWIKI_AUTH_CODE` | 當 `DEEPWIKI_AUTH_MODE` 啟用時，Wiki 產生所需的秘密代碼 | 否 | 只有在 `DEEPWIKI_AUTH_MODE` 為 `true` 或 `1` 時才使用 |
 
@@ -336,7 +336,7 @@ DeepWiki 可以設定為在授權模式下執行，在此模式下，Wiki 產生
 docker pull ghcr.io/asyncfuncai/deepwiki-open:latest
 
 # 使用環境變數執行容器
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -373,7 +373,7 @@ echo "OPENROUTER_API_KEY=your_openrouter_api_key" >> .env
 echo "OLLAMA_HOST=your_ollama_host" >> .env
 
 # 使用掛載的 .env 檔案執行容器
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -v $(pwd)/.env:/app/.env \
   -v ~/.adalflow:/root/.adalflow \
   ghcr.io/asyncfuncai/deepwiki-open:latest
@@ -399,7 +399,7 @@ cd deepwiki-open
 docker build -t deepwiki-open .
 
 # 執行容器
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -541,7 +541,7 @@ DeepWiki 支援多個 AI 模型提供商：
 - **「OpenRouter API 錯誤」**：驗證您的 OpenRouter API 金鑰有效且有足夠的額度
 
 ### 連線問題
-- **「無法連線到 API 伺服器」**：確保 API 伺服器在連接埠 8001 上執行
+- **「無法連線到 API 伺服器」**：確保 API 伺服器在連接埠 8011 上執行
 - **「CORS 錯誤」**：API 設定為允許所有來源，但如果您遇到問題，請嘗試在同一台機器上執行前端和後端
 
 ### 產生問題

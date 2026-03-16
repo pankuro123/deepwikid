@@ -173,8 +173,8 @@ deepwiki/
 | `GOOGLE_API_KEY` | Google Gemini API key  | Có |
 | `OPENAI_API_KEY` | OpenAI API key   | có |
 | `OPENROUTER_API_KEY` | OpenRouter API key   | không| Yêu cầu nếu bạn muốn dùng OpenRouter models |
-| `PORT` | Port của API server (mặc định: 8001) | không | Nếu bạn muốn chạy API và frontend trên cùng 1 máy, hãy điều chỉnh Port `SERVER_BASE_URL` |
-| `SERVER_BASE_URL` | Đường dẫnn mặt định của API server (mặc định: http://localhost:8001) | không |
+| `PORT` | Port của API server (mặc định: 8011\) | không | Nếu bạn muốn chạy API và frontend trên cùng 1 máy, hãy điều chỉnh Port `SERVER_BASE_URL` |
+| `SERVER_BASE_URL` | Đường dẫnn mặt định của API server (mặc định: http://localhost:8011) | không |
 
 ### Cài Đặt với Docker
 
@@ -185,7 +185,7 @@ Bạn có thể dùng Docker để run DeepWiki:
 docker pull ghcr.io/asyncfuncai/deepwiki-open:latest
 
 # Chạy container với biến môi trường
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -211,7 +211,7 @@ echo "OPENAI_API_KEY=your_openai_api_key" >> .env
 echo "OPENROUTER_API_KEY=your_openrouter_api_key" >> .env
 
 # Run container với .env file
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -v $(pwd)/.env:/app/.env \
   -v ~/.adalflow:/root/.adalflow \
   ghcr.io/asyncfuncai/deepwiki-open:latest
@@ -229,7 +229,7 @@ cd deepwiki-open
 docker build -t deepwiki-open .
 
 # Chạy container
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -391,7 +391,7 @@ DeepResearch nâng tầm phân tích kho mã với quy trình nghiện cứu nhi
 - **"Lỗi API OpenRouter"**: Xác minh rằng API key của OpenRouter là hợp lệ và có đủ tín dụng
 
 ### Vấn đề kết nối
-- **"Không thể kết nối với máy chủ API"**: Đảm bảo máy chủ API đang chạy trên cổng 8001
+- **"Không thể kết nối với máy chủ API"**: Đảm bảo máy chủ API đang chạy trên cổng 8011
 - **"Lỗi CORS"**: API được cấu hình để cho phép tất cả các nguồn gốc, nhưng nếu gặp sự cố, thử chạy cả frontend và backend trên cùng một máy tính
 
 ### Vấn đề khi tạo nội dung

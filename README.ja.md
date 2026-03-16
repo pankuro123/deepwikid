@@ -182,8 +182,8 @@ deepwiki/
 | `GOOGLE_API_KEY`              | AI 生成のための Google Gemini API キー                          | ◯    |                                                                                                               |
 | `OPENAI_API_KEY`              | 埋め込みのための OpenAI API キー                                | ◯    |                                                                                                               |
 | `OPENROUTER_API_KEY`          | 代替モデルのための OpenRouter API キー                          | ✗    | OpenRouter モデルを使用する場合にのみ必須です                                                                 |
-| `PORT`                        | API サーバーのポート（デフォルト：8001）                        | ✗    | API とフロントエンドを同じマシンでホストする場合、`NEXT_PUBLIC_SERVER_BASE_URL`のポートを適宜変更してください |
-| `SERVER_BASE_URL`             | API サーバーのベース URL（デフォルト：`http://localhost:8001`） | ✗    |                                                                                                               |
+| `PORT`                        | API サーバーのポート（デフォルト：8011）                        | ✗    | API とフロントエンドを同じマシンでホストする場合、`NEXT_PUBLIC_SERVER_BASE_URL`のポートを適宜変更してください |
+| `SERVER_BASE_URL`             | API サーバーのベース URL（デフォルト：`http://localhost:8011`） | ✗    |                                                                                                               |
 
 ### 設定ファイル
 
@@ -214,7 +214,7 @@ Docker を使用して DeepWiki を実行できます：
 docker pull ghcr.io/asyncfuncai/deepwiki-open:latest
 
 # 環境変数を設定してコンテナを実行
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -249,7 +249,7 @@ echo "OPENAI_API_KEY=your_openai_api_key" >> .env
 echo "OPENROUTER_API_KEY=your_openrouter_api_key" >> .env
 
 # .envファイルをマウントしてコンテナを実行
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -v $(pwd)/.env:/app/.env \
   -v ~/.adalflow:/root/.adalflow \
   ghcr.io/asyncfuncai/deepwiki-open:latest
@@ -276,7 +276,7 @@ cd deepwiki-open
 docker build -t deepwiki-open .
 
 # コンテナを実行
-docker run -p 8001:8001 -p 3000:3000 \
+docker run -p 8011:8011 -p 3000:3000 \
   -e GOOGLE_API_KEY=your_google_api_key \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e OPENROUTER_API_KEY=your_openrouter_api_key \
@@ -413,7 +413,7 @@ _DeepWiki の動作を見る！_
 
 ### 接続の問題
 
-- **「API サーバーに接続できません」**: API サーバーがポート 8001 で実行されていることを確認
+- **「API サーバーに接続できません」**: API サーバーがポート 8011 で実行されていることを確認
 - **「CORS エラー」**: API はすべてのオリジンを許可するように設定されていますが、問題がある場合は、フロントエンドとバックエンドを同じマシンで実行してみてください
 
 ### 生成の問題
