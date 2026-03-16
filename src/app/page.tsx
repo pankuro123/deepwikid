@@ -113,6 +113,18 @@ export default function Home() {
       // Optionally reset fields if input is cleared
     } else {
       loadConfigFromCache(newRepoUrl);
+
+      // Auto-detect platform from the URL domain
+      const domain = extractUrlDomain(newRepoUrl);
+      if (domain) {
+        if (domain.includes('github.com') || domain.includes('github.')) {
+          setSelectedPlatform('github');
+        } else if (domain.includes('gitlab.com') || domain.includes('gitlab.')) {
+          setSelectedPlatform('gitlab');
+        } else if (domain.includes('bitbucket.org') || domain.includes('bitbucket.')) {
+          setSelectedPlatform('bitbucket');
+        }
+      }
     }
   };
 
@@ -352,13 +364,23 @@ export default function Home() {
 
     const { owner, repo, type, localPath } = parsedRepo;
 
+    // Determine the effective platform type:
+    // - For local repos, use 'local'
+    // - For recognized platforms (github/gitlab/bitbucket), use the auto-detected type from URL
+    // - Fall back to the manually selected platform
+    const effectiveType = type === 'local'
+      ? 'local'
+      : (type === 'github' || type === 'gitlab' || type === 'bitbucket')
+        ? type
+        : selectedPlatform || 'github';
+
     // Store tokens in query params if they exist
     const params = new URLSearchParams();
     if (accessToken) {
       params.append('token', accessToken);
     }
     // Always include the type parameter
-    params.append('type', (type == 'local' ? type : selectedPlatform) || 'github');
+    params.append('type', effectiveType);
     // Add local path if it exists
     if (localPath) {
       params.append('local_path', encodeURIComponent(localPath));

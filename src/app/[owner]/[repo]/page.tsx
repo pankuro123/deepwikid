@@ -1312,83 +1312,215 @@ IMPORTANT:
         }
       }
       else if (effectiveRepoInfo.type === 'bitbucket') {
-        // Bitbucket API approach
-        const repoPath = extractUrlPath(effectiveRepoInfo.repoUrl ?? '') ?? `${owner}/${repo}`;
-        const encodedRepoPath = encodeURIComponent(repoPath);
+        // Bitbucket API approach - supports both Cloud (bitbucket.org) and Server/Data Center (self-hosted)
+        const repoUrlStr = effectiveRepoInfo.repoUrl ?? '';
+        const headers = createBitbucketHeaders(currentToken);
 
-        // Try to get the file tree for common branch names
+        // Detect whether this is Bitbucket Cloud or Bitbucket Server
+        let isBitbucketCloud = true;
+        let bitbucketBaseUrl = '';
+        let bbProject = '';
+        let bbRepo = '';
+
+        try {
+          const parsedBbUrl = new URL(repoUrlStr);
+          isBitbucketCloud = parsedBbUrl.hostname.toLowerCase().includes('bitbucket.org');
+          bitbucketBaseUrl = `${parsedBbUrl.protocol}//${parsedBbUrl.host}`;
+
+          if (!isBitbucketCloud) {
+            // Bitbucket Server: extract project and repo from /scm/{project}/{repo}.git
+            const pathParts = parsedBbUrl.pathname.replace(/\.git$/, '').split('/').filter(Boolean);
+            const scmIdx = pathParts.indexOf('scm');
+            if (scmIdx >= 0 && pathParts.length > scmIdx + 2) {
+              bbProject = pathParts[scmIdx + 1];
+              bbRepo = pathParts[scmIdx + 2];
+            } else {
+              // Fallback: use last two path segments
+              bbProject = pathParts[pathParts.length - 2] || owner;
+              bbRepo = pathParts[pathParts.length - 1] || repo;
+            }
+          }
+        } catch {
+          // If URL parsing fails, assume Cloud
+          isBitbucketCloud = true;
+        }
+
         let filesData = null;
         let apiErrorDetails = '';
         let defaultBranchLocal = '';
-        const headers = createBitbucketHeaders(currentToken);
 
-        // First get project info to determine default branch
-        const projectInfoUrl = `https://api.bitbucket.org/2.0/repositories/${encodedRepoPath}`;
-        try {
-          const response = await fetch(projectInfoUrl, { headers });
+        if (isBitbucketCloud) {
+          // ---- Bitbucket Cloud ----
+          const repoPath = extractUrlPath(repoUrlStr)?.replace(/\.git$/, '') ?? `${owner}/${repo}`;
+          const encodedRepoPath = encodeURIComponent(repoPath);
 
-          const responseText = await response.text();
+          const projectInfoUrl = `https://api.bitbucket.org/2.0/repositories/${encodedRepoPath}`;
+          try {
+            const response = await fetch(projectInfoUrl, { headers });
+            const responseText = await response.text();
 
-          if (response.ok) {
-            const projectData = JSON.parse(responseText);
-            defaultBranchLocal = projectData.mainbranch.name;
-            // Store the default branch in state
-            setDefaultBranch(defaultBranchLocal);
+            if (response.ok) {
+              const projectData = JSON.parse(responseText);
+              defaultBranchLocal = projectData.mainbranch?.name || 'main';
+              setDefaultBranch(defaultBranchLocal);
 
-            const apiUrl = `https://api.bitbucket.org/2.0/repositories/${encodedRepoPath}/src/${defaultBranchLocal}/?recursive=true&per_page=100`;
-            try {
-              const response = await fetch(apiUrl, {
-                headers
-              });
+              const apiUrl = `https://api.bitbucket.org/2.0/repositories/${encodedRepoPath}/src/${defaultBranchLocal}/?recursive=true&per_page=100`;
+              try {
+                const treeResponse = await fetch(apiUrl, { headers });
+                const structureResponseText = await treeResponse.text();
 
-              const structureResponseText = await response.text();
-
-              if (response.ok) {
-                filesData = JSON.parse(structureResponseText);
-              } else {
-                const errorData = structureResponseText;
-                apiErrorDetails = `Status: ${response.status}, Response: ${errorData}`;
+                if (treeResponse.ok) {
+                  filesData = JSON.parse(structureResponseText);
+                } else {
+                  apiErrorDetails = `Status: ${treeResponse.status}, Response: ${structureResponseText}`;
+                }
+              } catch (err) {
+                console.error(`Network error fetching Bitbucket Cloud branch ${defaultBranchLocal}:`, err);
               }
-            } catch (err) {
-              console.error(`Network error fetching Bitbucket branch ${defaultBranchLocal}:`, err);
+            } else {
+              apiErrorDetails = `Status: ${response.status}, Response: ${responseText}`;
             }
-          } else {
-            const errorData = responseText;
-            apiErrorDetails = `Status: ${response.status}, Response: ${errorData}`;
+          } catch (err) {
+            console.error("Network error fetching Bitbucket Cloud project info:", err);
           }
-        } catch (err) {
-          console.error("Network error fetching Bitbucket project info:", err);
-        }
 
-        if (!filesData || !Array.isArray(filesData.values) || filesData.values.length === 0) {
-          if (apiErrorDetails) {
-            throw new Error(`Could not fetch repository structure. Bitbucket API Error: ${apiErrorDetails}`);
-          } else {
-            throw new Error('Could not fetch repository structure. Repository might not exist, be empty or private.');
+          if (!filesData || !Array.isArray(filesData.values) || filesData.values.length === 0) {
+            if (apiErrorDetails) {
+              throw new Error(`Could not fetch repository structure. Bitbucket Cloud API Error: ${apiErrorDetails}`);
+            } else {
+              throw new Error('Could not fetch repository structure. Repository might not exist, be empty or private.');
+            }
           }
-        }
 
-        // Convert files data to a string representation
-        fileTreeData = filesData.values
-          .filter((item: { type: string; path: string }) => item.type === 'commit_file')
-          .map((item: { type: string; path: string }) => item.path)
-          .join('\n');
+          // Convert Cloud files data to a string representation
+          fileTreeData = filesData.values
+            .filter((item: { type: string; path: string }) => item.type === 'commit_file')
+            .map((item: { type: string; path: string }) => item.path)
+            .join('\n');
 
-        // Try to fetch README.md content
-        try {
-          const headers = createBitbucketHeaders(currentToken);
-
-          const readmeResponse = await fetch(`https://api.bitbucket.org/2.0/repositories/${encodedRepoPath}/src/${defaultBranchLocal}/README.md`, {
-            headers
-          });
-
-          if (readmeResponse.ok) {
-            readmeContent = await readmeResponse.text();
-          } else {
-            console.warn(`Could not fetch Bitbucket README.md, status: ${readmeResponse.status}`);
+          // Try to fetch README.md content from Cloud
+          try {
+            const readmeResponse = await fetch(
+              `https://api.bitbucket.org/2.0/repositories/${encodedRepoPath}/src/${defaultBranchLocal}/README.md`,
+              { headers }
+            );
+            if (readmeResponse.ok) {
+              readmeContent = await readmeResponse.text();
+            } else {
+              console.warn(`Could not fetch Bitbucket Cloud README.md, status: ${readmeResponse.status}`);
+            }
+          } catch (err) {
+            console.warn('Could not fetch Bitbucket Cloud README.md, continuing with empty README', err);
           }
-        } catch (err) {
-          console.warn('Could not fetch Bitbucket README.md, continuing with empty README', err);
+
+        } else {
+          // ---- Bitbucket Server / Data Center ----
+          // REST API 1.0: /rest/api/1.0/projects/{project}/repos/{repo}/...
+          // All calls go through /api/bitbucket-proxy to avoid CORS issues
+          const serverApiBase = `${bitbucketBaseUrl}/rest/api/1.0/projects/${bbProject}/repos/${bbRepo}`;
+
+          // Helper to proxy Bitbucket Server API calls
+          const fetchBitbucketServer = async (url: string): Promise<Response> => {
+            return fetch('/api/bitbucket-proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url, token: currentToken || undefined }),
+            });
+          };
+
+          // Step 1: Get default branch
+          try {
+            // Try repository info endpoint first
+            const repoInfoResponse = await fetchBitbucketServer(serverApiBase);
+            if (repoInfoResponse.ok) {
+              const repoData = await repoInfoResponse.json();
+              if (repoData.defaultBranch) {
+                // Some Bitbucket Server versions use 'defaultBranch' as a string directly
+                defaultBranchLocal = typeof repoData.defaultBranch === 'string'
+                  ? repoData.defaultBranch
+                  : repoData.defaultBranch.displayId || repoData.defaultBranch.id || 'master';
+              }
+            }
+
+            // If still no branch, try the default-branch endpoint
+            if (!defaultBranchLocal) {
+              const branchResponse = await fetchBitbucketServer(`${serverApiBase}/default-branch`);
+              if (branchResponse.ok) {
+                const branchData = await branchResponse.json();
+                defaultBranchLocal = branchData.displayId || branchData.id || 'master';
+              }
+            }
+
+            if (!defaultBranchLocal) {
+              defaultBranchLocal = 'master'; // Bitbucket Server often defaults to 'master'
+            }
+
+            console.log(`Found Bitbucket Server default branch: ${defaultBranchLocal}`);
+            setDefaultBranch(defaultBranchLocal);
+          } catch (err) {
+            console.warn('Could not determine Bitbucket Server default branch, using master:', err);
+            defaultBranchLocal = 'master';
+            setDefaultBranch(defaultBranchLocal);
+          }
+
+          // Step 2: Fetch file tree using the browse/files API
+          // Bitbucket Server REST API: /rest/api/1.0/projects/{project}/repos/{repo}/files?at={branch}&limit=10000
+          try {
+            let allFiles: string[] = [];
+            let start = 0;
+            let isLastPage = false;
+
+            while (!isLastPage) {
+              const filesUrl = `${serverApiBase}/files?at=${encodeURIComponent(defaultBranchLocal)}&limit=1000&start=${start}`;
+              const filesResponse = await fetchBitbucketServer(filesUrl);
+
+              if (!filesResponse.ok) {
+                const errorText = await filesResponse.text();
+                apiErrorDetails = `Status: ${filesResponse.status}, Response: ${errorText}`;
+                console.error(`Error fetching Bitbucket Server files: ${apiErrorDetails}`);
+                break;
+              }
+
+              const filesResult = await filesResponse.json();
+              if (filesResult.values && Array.isArray(filesResult.values)) {
+                allFiles = allFiles.concat(filesResult.values);
+              }
+
+              isLastPage = filesResult.isLastPage !== false;
+              start = filesResult.nextPageStart || (start + 1000);
+            }
+
+            if (allFiles.length === 0) {
+              if (apiErrorDetails) {
+                throw new Error(`Could not fetch repository structure. Bitbucket Server API Error: ${apiErrorDetails}`);
+              } else {
+                throw new Error('Could not fetch repository structure. Repository might not exist, be empty or private.');
+              }
+            }
+
+            // Bitbucket Server /files endpoint returns plain file path strings
+            fileTreeData = allFiles.join('\n');
+          } catch (err) {
+            if (err instanceof Error && err.message.includes('Could not fetch')) {
+              throw err;
+            }
+            console.error('Error fetching Bitbucket Server file tree:', err);
+            throw new Error('Could not fetch repository structure from Bitbucket Server.');
+          }
+
+          // Step 3: Try to fetch README.md content from Server
+          try {
+            const readmeUrl = `${serverApiBase}/raw/README.md?at=${encodeURIComponent(defaultBranchLocal)}`;
+            const readmeResponse = await fetchBitbucketServer(readmeUrl);
+            if (readmeResponse.ok) {
+              readmeContent = await readmeResponse.text();
+              console.log('Successfully fetched Bitbucket Server README.md');
+            } else {
+              console.warn(`Could not fetch Bitbucket Server README.md, status: ${readmeResponse.status}`);
+            }
+          } catch (err) {
+            console.warn('Could not fetch Bitbucket Server README.md, continuing with empty README', err);
+          }
         }
       }
 
