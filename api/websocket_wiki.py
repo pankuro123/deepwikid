@@ -190,6 +190,21 @@ async def handle_websocket_chat(websocket: WebSocket):
         # Get the query from the last message
         query = last_message.content
 
+        # Detect wiki generation requests
+        is_wiki_generation = "[WIKI_GENERATION]" in query
+        wiki_topic = None
+        if is_wiki_generation:
+            # Extract the wiki topic for RAG query
+            import re
+            topic_match = re.search(r'\[WIKI_TOPIC:([^\]]+)\]', query)
+            if topic_match:
+                wiki_topic = topic_match.group(1).strip()
+            # Clean the markers from the query but keep the full prompt
+            wiki_prompt = query.replace("[WIKI_GENERATION]", "").strip()
+            if topic_match:
+                wiki_prompt = wiki_prompt.replace(topic_match.group(0), "").strip()
+            logger.info(f"Wiki generation request detected for topic: {wiki_topic}")
+
         # Only retrieve documents if input is not too large
         context_text = ""
         retrieved_documents = None
@@ -198,7 +213,11 @@ async def handle_websocket_chat(websocket: WebSocket):
             try:
                 # If filePath exists, modify the query for RAG to focus on the file
                 rag_query = query
-                if request.filePath:
+                if is_wiki_generation and wiki_topic:
+                    # For wiki generation, use just the topic for better RAG retrieval
+                    rag_query = wiki_topic
+                    logger.info(f"Using wiki topic for RAG query: {wiki_topic}")
+                elif request.filePath:
                     # Use the file path to get relevant context about the file
                     rag_query = f"Contexts related to {request.filePath}"
                     logger.info(f"Modified RAG query to focus on file: {request.filePath}")
@@ -357,7 +376,13 @@ IMPORTANT:You MUST respond in {language_name} language.
 - Cite specific files and code sections when relevant
 </style>"""
         else:
-            system_prompt = f"""<role>
+            if is_wiki_generation:
+                # For wiki generation, use the wiki prompt as the system prompt
+                # This gives the LLM proper wiki-writing instructions
+                system_prompt = wiki_prompt
+                logger.info("Using wiki generation prompt as system prompt")
+            else:
+                system_prompt = f"""<role>
 You are an expert code analyst examining the {repo_type} repository: {repo_url} ({repo_name}).
 You provide direct, concise, and accurate information about code repositories.
 You NEVER start responses with markdown headers or code fences.

@@ -18,7 +18,8 @@ export const getWikiGenerationPrompt = (
                                                 'English';
 
     if (reportType === 'technical') {
-        return `You are an expert technical writer and software architect.
+        return `[WIKI_GENERATION][WIKI_TOPIC:${wikiPageTopic}]
+You are an expert technical writer and software architect.
 Your task is to generate a comprehensive and accurate technical wiki page in Markdown format about a specific feature, system, or module within a given software project.
 
 You will be given:
@@ -112,7 +113,7 @@ IMPORTANT: Generate the content in ${languageName}.
     }
 
     // Default to functional prompt
-    return `
+    return `[WIKI_GENERATION][WIKI_TOPIC:${wikiPageTopic}]
 Model's Role and Tone
 
 You are a functional Business Analyst in a large bank (AML/CTF/compliance context).

@@ -2066,13 +2066,13 @@ IMPORTANT:
         !error &&
         wikiStructure &&
         Object.keys(generatedPages).length > 0 &&
-        Object.keys(generatedPages).length >= wikiStructure.pages.length &&
         !cacheLoadedSuccessfully.current) {
 
-        const allPagesHaveContent = wikiStructure.pages.every(page =>
+        // Save cache when at least some pages have real content (not just 'Loading...')
+        const pagesWithContent = wikiStructure.pages.filter(page =>
           generatedPages[page.id] && generatedPages[page.id].content && generatedPages[page.id].content !== 'Loading...');
 
-        if (allPagesHaveContent) {
+        if (pagesWithContent.length > 0) {
           console.log('Attempting to save wiki data to server cache via Next.js proxy');
 
           try {
@@ -2113,7 +2113,7 @@ IMPORTANT:
     };
 
     saveCache();
-  }, [isLoading, error, wikiStructure, generatedPages, effectiveRepoInfo.owner, effectiveRepoInfo.repo, effectiveRepoInfo.type, effectiveRepoInfo.repoUrl, repoUrl, language, isComprehensiveView]);
+  }, [isLoading, error, wikiStructure, generatedPages, effectiveRepoInfo.owner, effectiveRepoInfo.repo, effectiveRepoInfo.type, effectiveRepoInfo.repoUrl, repoUrl, language, isComprehensiveView, reportType]);
 
   const handlePageSelect = (pageId: string) => {
     if (currentPageId != pageId) {
