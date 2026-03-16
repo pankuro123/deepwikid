@@ -473,6 +473,23 @@ app.add_api_route("/chat/completions/stream", chat_completions_stream, methods=[
 # Add the WebSocket endpoint
 app.add_websocket_route("/ws/chat", handle_websocket_chat)
 
+# --- Mount Jira Pipeline ---
+try:
+    import sys
+    import os
+    # Add jira_pipeline directory to path so it can import 'pipeline' correctly
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(current_dir)
+    jira_pipeline_dir = os.path.join(root_dir, 'jira_pipeline')
+    if jira_pipeline_dir not in sys.path:
+        sys.path.insert(0, jira_pipeline_dir)
+        
+    from jira_pipeline.service_api import app as jira_app
+    app.mount("/jira", jira_app)
+    logger.info("Jira pipeline API mounted at /jira")
+except Exception as e:
+    logger.warning(f"Could not mount Jira pipeline API: {e}")
+
 # --- Wiki Cache Helper Functions ---
 
 WIKI_CACHE_DIR = os.path.join(get_adalflow_default_root_path(), "wikicache")
