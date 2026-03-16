@@ -50,9 +50,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine SSL verification settings
-    // In Node.js, we can use the NODE_TLS_REJECT_UNAUTHORIZED env var
-    // or pass a custom agent. For corporate environments with self-signed certs,
-    // set NODE_TLS_REJECT_UNAUTHORIZED=0 or configure SSL_CERT_FILE.
+    // In Node.js, we can use an HTTPS agent to control SSL verification
+    const isSslNoVerify = process.env.GIT_SSL_NO_VERIFY === 'true' || process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0';
+    
+    // For Node.js fetch (undici), we'd usually use a Dispatcher, 
+    // but a simpler way for corporate environments is to use the global setting
+    // if the user has requested it via GIT_SSL_NO_VERIFY.
+    if (isSslNoVerify) {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    }
+
     const response = await fetch(url, {
       method: 'GET',
       headers,
