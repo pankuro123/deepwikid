@@ -92,27 +92,39 @@ export default function JiraPage() {
     );
   };
 
+  // Helper function to clean text from JSON artifacts
+  const formatText = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'object') {
+      // If it's an object, let's try to extract meaningful text or join keys/values
+      return Object.entries(val)
+        .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${formatText(v)}`)
+        .join(', ');
+    }
+    // Remove { } and other JSON artifacts if they accidentally leaked in as strings
+    return String(val).replace(/[{}]/g, '').trim();
+  };
+
   // Helper to neatly render clusters
   const renderCluster = (cluster: any, index: number) => {
-    // Handle cases where cluster might be an entry from an object or a direct object
     const clusterData = cluster;
-    const clusterName = clusterData.functional_area || clusterData.cluster_name || clusterData.name || clusterData.title || `Requirement Group ${index + 1}`;
-    const description = clusterData.summary || clusterData.description || '';
+    const clusterName = formatText(clusterData.functional_area || clusterData.cluster_name || clusterData.name || clusterData.title || `Requirement Group ${index + 1}`);
+    const description = formatText(clusterData.summary || clusterData.description || '');
     const items = clusterData.requirements || clusterData.items || clusterData.tickets || [];
     
     return (
-      <div key={index} className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-sm mb-6 overflow-hidden transition-all hover:shadow-md">
-        <div className="bg-[var(--accent-primary)]/5 px-6 py-5 border-b border-[var(--border-color)]">
-          <div className="flex items-start gap-4">
-            <div className="bg-[var(--accent-primary)]/10 p-2 rounded-lg mt-1">
-              <FaListAlt className="text-[var(--accent-primary)] text-lg" />
+      <div key={index} className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] shadow-sm mb-10 overflow-hidden transition-all hover:shadow-md">
+        <div className="bg-[var(--accent-primary)]/5 px-8 py-6 border-b border-[var(--border-color)]">
+          <div className="flex items-start gap-5">
+            <div className="bg-[var(--accent-primary)]/10 p-3 rounded-xl mt-1">
+              <FaListAlt className="text-[var(--accent-primary)] text-xl" />
             </div>
             <div className="flex-1">
-              <h3 className="text-xl font-bold text-[var(--foreground)] font-serif leading-tight">
+              <h3 className="text-2xl font-bold text-[var(--foreground)] font-serif leading-tight mb-2">
                 {clusterName}
               </h3>
               {description && (
-                <p className="mt-2 text-sm text-[var(--muted)] leading-relaxed italic">
+                <p className="text-sm text-[var(--muted)] leading-relaxed italic">
                   {description}
                 </p>
               )}
@@ -120,33 +132,42 @@ export default function JiraPage() {
           </div>
         </div>
         
-        <div className="p-6 bg-[var(--background)]/30">
+        <div className="p-8">
           {Array.isArray(items) && items.length > 0 ? (
-            <div className="space-y-4">
-              <h4 className="text-xs font-bold text-[var(--accent-primary)] uppercase tracking-widest mb-2 opacity-70">Requirements & Specs</h4>
-              <ul className="space-y-3">
-                {items.map((item, idx) => (
-                  <li key={idx} className="flex gap-3 group">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] mt-1.5 flex-shrink-0 group-hover:scale-125 transition-transform" />
-                    <div className="text-sm text-[var(--foreground)] leading-relaxed">
-                      {typeof item === 'string' ? item : JSON.stringify(item)}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            <div className="overflow-x-auto rounded-lg border border-[var(--border-color)] shadow-inner">
+              <table className="w-full text-left border-collapse bg-[var(--background)]/20">
+                <thead>
+                  <tr className="bg-[var(--accent-primary)]/10">
+                    <th className="px-6 py-4 text-xs font-bold text-[var(--accent-primary)] uppercase tracking-widest border-b border-[var(--border-color)] w-16">#</th>
+                    <th className="px-6 py-4 text-xs font-bold text-[var(--accent-primary)] uppercase tracking-widest border-b border-[var(--border-color)]">Requirement Specification</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-color)]">
+                  {items.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-[var(--accent-primary)]/[0.02] transition-colors">
+                      <td className="px-6 py-4 text-sm font-mono text-[var(--muted)] align-top">{idx + 1}</td>
+                      <td className="px-6 py-4 text-sm text-[var(--foreground)] leading-relaxed whitespace-pre-wrap">
+                        {formatText(item)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
-            <p className="text-sm text-[var(--muted)] italic">No specific sub-requirements documented for this area.</p>
+            <p className="text-sm text-[var(--muted)] italic bg-[var(--background)]/50 p-6 rounded-lg border border-dashed border-[var(--border-color)]">
+              No specific sub-requirements documented for this area.
+            </p>
           )}
           
           {/* Render any additional fields at the top level of the cluster if they exist */}
           {Object.entries(clusterData).map(([key, value]) => {
             if (!['functional_area', 'cluster_name', 'name', 'title', 'description', 'summary', 'requirements', 'items', 'tickets'].includes(key)) {
               return (
-                 <div key={key} className="mt-6 pt-4 border-t border-[var(--border-color)]/50">
-                   <h4 className="text-xs font-bold text-[var(--accent-primary)] uppercase tracking-widest mb-2 opacity-70">{key.replace(/_/g, ' ')}</h4>
-                   <div className="text-sm text-[var(--foreground)] bg-[var(--card-bg)]/50 p-4 rounded-lg border border-[var(--border-color)] shadow-inner">
-                     {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                 <div key={key} className="mt-8 pt-6 border-t border-[var(--border-color)]/30">
+                   <h4 className="text-xs font-bold text-[var(--accent-primary)] uppercase tracking-widest mb-3 opacity-70">{key.replace(/_/g, ' ')}</h4>
+                   <div className="text-sm text-[var(--foreground)] leading-relaxed">
+                     {formatText(value)}
                    </div>
                  </div>
               );
