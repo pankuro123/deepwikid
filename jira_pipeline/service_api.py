@@ -7,7 +7,6 @@ import shutil
 import json
 import uuid
 from datetime import datetime
-from pipeline import run_full_pipeline
 
 app = FastAPI(title="Jira PDF to Requirements API")
 
@@ -44,8 +43,9 @@ async def process_pdf(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving uploaded file: {e}")
 
-    # Exécuter le pipeline
+    # Exécuter le pipeline (lazy import to avoid import errors at mount time)
     try:
+        from pipeline import run_full_pipeline
         result_paths = run_full_pipeline(
             pdf_path=pdf_path,
             work_dir=work_dir,
