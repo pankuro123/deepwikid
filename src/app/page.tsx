@@ -440,7 +440,7 @@ export default function Home() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/upload-project', {
+      const response = await fetch('/api/zip-upload-proxy', {
         method: 'POST',
         body: formData,
       });
