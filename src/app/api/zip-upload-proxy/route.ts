@@ -17,11 +17,12 @@ import { NextRequest, NextResponse } from 'next/server';
 // Allow up to 5 minutes for large ZIP uploads to complete
 export const maxDuration = 300;
 
-const TARGET_SERVER_BASE_URL = process.env.SERVER_BASE_URL || 'http://localhost:8011';
+const TARGET_SERVER_BASE_URL = process.env.SERVER_BASE_URL || 'http://127.0.0.1:8011';
 
 export async function POST(request: NextRequest) {
   try {
     const targetUrl = `${TARGET_SERVER_BASE_URL}/upload/project`;
+    console.log(`[upload-project] Proxying request to: ${targetUrl}`);
 
     // Forward the raw request body (multipart/form-data) as-is to the Python backend.
     // We pass the body as a ReadableStream to avoid buffering the entire file in memory.

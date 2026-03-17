@@ -334,6 +334,7 @@ async def upload_project(file: UploadFile = File(...)):
     Upload a zipped project folder for wiki generation.
     Accepts a ZIP file, extracts it, and returns the server-side path.
     """
+    logger.info(f"Received ZIP upload request for file: {file.filename}")
     if not file.filename or not file.filename.endswith('.zip'):
         return JSONResponse(
             status_code=400,
