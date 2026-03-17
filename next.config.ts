@@ -70,6 +70,10 @@ const nextConfig: NextConfig = {
         source: '/upload/project',
         destination: `${TARGET_SERVER_BASE_URL}/upload/project`,
       },
+      {
+        source: '/ws/:path*',
+        destination: `${TARGET_SERVER_BASE_URL}/ws/:path*`,
+      },
     ];
   },
 };

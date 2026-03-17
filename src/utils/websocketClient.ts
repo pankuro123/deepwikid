@@ -4,12 +4,15 @@
  */
 
 // Get the server base URL from environment or use default
-const SERVER_BASE_URL = process.env.SERVER_BASE_URL || 'http://localhost:8011';
-
-// Convert HTTP URL to WebSocket URL
+// process.env.SERVER_BASE_URL is undefined on client side. So we connect to the current host
+// and let Next.js rewrites proxy the request to the backend.
 const getWebSocketUrl = () => {
-  const baseUrl = SERVER_BASE_URL;
-  // Replace http:// with ws:// or https:// with wss://
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}/ws/chat`;
+  }
+  // Fallback for SSR
+  const baseUrl = process.env.SERVER_BASE_URL || 'http://localhost:8011';
   const wsBaseUrl = baseUrl.replace(/^http/, 'ws');
   return `${wsBaseUrl}/ws/chat`;
 };

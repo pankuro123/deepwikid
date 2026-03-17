@@ -265,9 +265,9 @@ Give me the numbered list with brief descriptions for each slide. Be creative bu
 
       try {
         // Create WebSocket URL from the server base URL
-        const serverBaseUrl = process.env.SERVER_BASE_URL || 'http://localhost:8011';
-        const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws')? serverBaseUrl.replace(/^https/, 'wss'): serverBaseUrl.replace(/^http/, 'ws');
-        const wsUrl = `${wsBaseUrl}/ws/chat`;
+        // Use relative WebSocket path to route through Next.js proxy
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/chat`;
 
         // Create a new WebSocket connection
         const ws = new WebSocket(wsUrl);
@@ -541,9 +541,9 @@ Please return ONLY the HTML with no markdown formatting or code blocks. Just the
 
         try {
           // Create WebSocket URL from the server base URL
-          const serverBaseUrl = process.env.SERVER_BASE_URL || 'http://localhost:8011';
-          const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws')? serverBaseUrl.replace(/^https/, 'wss'): serverBaseUrl.replace(/^http/, 'ws');
-          const wsUrl = `${wsBaseUrl}/ws/chat`;
+          // Use relative WebSocket path to route through Next.js proxy
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = `${protocol}//${window.location.host}/ws/chat`;
 
           // Create a new WebSocket connection
           const ws = new WebSocket(wsUrl);

@@ -317,9 +317,9 @@ Make the workshop content in ${language === 'en' ? 'English' :
 
       try {
         // Create WebSocket URL from the server base URL
-        const serverBaseUrl = process.env.SERVER_BASE_URL || 'http://localhost:8011';
-        const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws')? serverBaseUrl.replace(/^https/, 'wss'): serverBaseUrl.replace(/^http/, 'ws');
-        const wsUrl = `${wsBaseUrl}/ws/chat`;
+        // Use relative WebSocket path to route through Next.js proxy
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/chat`;
 
         // Create a new WebSocket connection
         const ws = new WebSocket(wsUrl);
