@@ -440,14 +440,22 @@ export default function Home() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/upload/project', {
+      const response = await fetch('/api/upload-project', {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+        let errorMessage = 'Upload failed';
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } else {
+          const rawText = await response.text();
+          errorMessage = `Server error (${response.status}): ${rawText.slice(0, 150)}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

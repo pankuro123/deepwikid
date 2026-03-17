@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   // Optimize build for Docker
   experimental: {
     optimizePackageImports: ['@mermaid-js/mermaid', 'react-syntax-highlighter'],
+    serverActions: {
+      bodySizeLimit: '500mb',
+    },
   },
   // Reduce memory usage during build
   webpack: (config, { isServer }) => {
