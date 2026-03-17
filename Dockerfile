@@ -70,6 +70,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy Python dependencies
 COPY --from=py_deps /api/.venv /opt/venv
 COPY api/ ./api/
+COPY jira_pipeline/ ./jira_pipeline/
 
 # Copy Node app
 COPY --from=node_builder /app/public ./public
