@@ -633,7 +633,7 @@ export default function Home() {
               {/* Show processed projects */}
               <ProcessedProjects
                 showHeader={false}
-                maxItems={6}
+                maxItems={9}
                 messages={messages}
                 className="w-full"
               />
