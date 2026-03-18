@@ -7,6 +7,7 @@ import ThemeToggle from '@/components/theme-toggle';
 
 export default function JiraPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [ticketPrefix, setTicketPrefix] = useState<string>("COMDEV.");
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export default function JiraPage() {
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('ticket_prefix', ticketPrefix);
 
     try {
       const response = await fetch('/api/process-pdf', {
@@ -360,6 +362,24 @@ export default function JiraPage() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Configuration Options */}
+          <div className="mt-8 flex flex-col items-start w-full max-w-sm mx-auto">
+            <label htmlFor="ticketPrefix" className="text-sm font-semibold text-[var(--foreground)] mb-2">
+              Ticket Prefix
+            </label>
+            <input
+              id="ticketPrefix"
+              type="text"
+              value={ticketPrefix}
+              onChange={(e) => setTicketPrefix(e.target.value)}
+              className="w-full bg-[var(--background)] border border-[var(--border-color)] rounded-lg px-4 py-3 text-sm text-[var(--foreground)] focus:border-[var(--accent-primary)] focus:outline-none transition-colors shadow-sm"
+              placeholder="e.g., COMDEV. or CLO-REQ-"
+            />
+            <p className="text-xs text-[var(--muted)] mt-2 text-left w-full">
+              The pipeline uses this prefix to locate tickets within the PDF text blocks. (e.g. "CLO-REQ-")
+            </p>
           </div>
 
           {/* Error Message */}

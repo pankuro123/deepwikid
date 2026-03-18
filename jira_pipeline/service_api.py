@@ -1,6 +1,6 @@
 # jira_pipeline/service_api.py
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
 import os
 import shutil
@@ -20,12 +20,14 @@ except (PermissionError, OSError):
     RESULTS_DIR = os.path.join(tempfile.gettempdir(), "jira_results")
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
-
 @app.post("/process_pdf")
-async def process_pdf(file: UploadFile = File(...)):
+async def process_pdf(
+    file: UploadFile = File(...),
+    ticket_prefix: str = Form("COMDEV.")  # Default fallback
+):
     """
     Endpoint principal :
-    - reçoit un PDF Jira,
+    - reçoit un PDF Jira et un préfixe optionnel
     - exécute le pipeline complet,
     - sauvegarde le résultat de manière persistante,
     - renvoie le JSON des exigences consolidées.
@@ -55,7 +57,7 @@ async def process_pdf(file: UploadFile = File(...)):
         result_paths = run_full_pipeline(
             pdf_path=pdf_path,
             work_dir=work_dir,
-            ticket_prefix="COMDEV."
+            ticket_prefix=ticket_prefix
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))

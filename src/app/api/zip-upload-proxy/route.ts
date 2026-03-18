@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     console.log(`[upload-project] Proxying request to: ${targetUrl}`);
 
     // Forward the raw request body (multipart/form-data) as-is to the Python backend.
-    // We pass the body as a ReadableStream to avoid buffering the entire file in memory.
+    // We pass the body as a ReadableStream to avoid buffering the entire file in memory!
     const contentType = request.headers.get('content-type') || '';
 
     if (!contentType.includes('multipart/form-data')) {
@@ -35,39 +35,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read the form data from the incoming request
-    let formData: FormData;
-    try {
-      formData = await request.formData();
-    } catch (err) {
-      console.error('[upload-project] Failed to parse incoming form data:', err);
-      return NextResponse.json(
-        { error: 'Failed to read uploaded file. The file may be too large or corrupted.' },
-        { status: 400 }
-      );
-    }
-
-    const file = formData.get('file');
-    if (!file || !(file instanceof Blob)) {
-      return NextResponse.json(
-        { error: 'No file found in request. Please include a file field.' },
-        { status: 400 }
-      );
-    }
-
-    // Re-build the FormData to forward to the Python backend
-    const forwardFormData = new FormData();
-    forwardFormData.append('file', file, (file as File).name || 'project.zip');
-
-    // Forward to the Python FastAPI backend
+    // Forward to the Python FastAPI backend using direct streaming
     let backendResponse: Response;
     try {
       backendResponse = await fetch(targetUrl, {
         method: 'POST',
-        body: forwardFormData,
-        // Do NOT set Content-Type header manually — fetch will set the correct
-        // multipart boundary automatically when body is a FormData instance.
-      });
+        headers: {
+          'Content-Type': contentType, // Crucial: preserve the exact multipart boundary
+        },
+        body: request.body as unknown as BodyInit,
+        duplex: 'half', // Required for Node.js fetch when body is a stream
+      } as RequestInit);
     } catch (networkErr) {
       console.error('[upload-project] Network error reaching Python backend:', networkErr);
       return NextResponse.json(
