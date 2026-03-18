@@ -51,7 +51,7 @@ async def process_pdf(file: UploadFile = File(...)):
 
     # Exécuter le pipeline (lazy import to avoid import errors at mount time)
     try:
-        from pipeline import run_full_pipeline
+        from jira_pipeline.pipeline import run_full_pipeline
         result_paths = run_full_pipeline(
             pdf_path=pdf_path,
             work_dir=work_dir,
