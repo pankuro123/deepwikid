@@ -14,7 +14,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Proxy the request to the local FastAPI server
-    const targetBaseUrl = process.env.SERVER_BASE_URL || "http://127.0.0.1:8011";
+    let targetBaseUrl = process.env.SERVER_BASE_URL || "http://127.0.0.1:8011";
+    if (targetBaseUrl.endsWith('/')) {
+        targetBaseUrl = targetBaseUrl.slice(0, -1);
+    }
     const response = await fetch(`${targetBaseUrl}/jira/process_pdf`, {
       method: "POST",
       body: formData,

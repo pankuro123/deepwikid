@@ -11,8 +11,12 @@ from datetime import datetime
 app = FastAPI(title="Jira PDF to Requirements API")
 
 # Persistent directory to store pipeline results
-RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
-os.makedirs(RESULTS_DIR, exist_ok=True)
+try:
+    RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+except (PermissionError, OSError):
+    RESULTS_DIR = "/tmp/jira_results"
+    os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
 @app.post("/process_pdf")

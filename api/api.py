@@ -479,38 +479,30 @@ try:
     import sys
     import os
     import importlib.util
-    import traceback
 
     # Resolve paths absolutely so this works regardless of cwd
     current_dir = os.path.dirname(os.path.abspath(__file__))  # .../api
     root_dir = os.path.dirname(current_dir)                   # .../deepwiki-open
     jira_pipeline_dir = os.path.join(root_dir, 'jira_pipeline')
-    service_api_path = os.path.join(jira_pipeline_dir, "service_api.py")
 
-    logger.info(f"Jira pipeline dir resolved to: {jira_pipeline_dir}")
+    # Make sure jira_pipeline internal imports (e.g. `import pipeline`) work
+    if jira_pipeline_dir not in sys.path:
+        sys.path.insert(0, jira_pipeline_dir)
 
-    if not os.path.isdir(jira_pipeline_dir):
-        logger.warning(f"Jira pipeline directory not found: {jira_pipeline_dir} — skipping mount.")
-    elif not os.path.isfile(service_api_path):
-        logger.warning(f"service_api.py not found at: {service_api_path} — skipping mount.")
-    else:
-        # Make sure jira_pipeline internal imports (e.g. `import pipeline`) work
-        if jira_pipeline_dir not in sys.path:
-            sys.path.insert(0, jira_pipeline_dir)
+    # Load service_api by file path — works regardless of working directory
+    _spec = importlib.util.spec_from_file_location(
+        "jira_pipeline.service_api",
+        os.path.join(jira_pipeline_dir, "service_api.py"),
+    )
+    _mod = importlib.util.module_from_spec(_spec)
+    sys.modules["jira_pipeline.service_api"] = _mod
+    _spec.loader.exec_module(_mod)
 
-        # Load service_api by file path — works regardless of working directory
-        _spec = importlib.util.spec_from_file_location(
-            "jira_pipeline.service_api",
-            service_api_path,
-        )
-        _mod = importlib.util.module_from_spec(_spec)
-        sys.modules["jira_pipeline.service_api"] = _mod
-        _spec.loader.exec_module(_mod)
-
-        jira_app = _mod.app
-        app.mount("/jira", jira_app)
-        logger.info(f"Jira pipeline API successfully mounted at /jira (from {service_api_path})")
+    jira_app = _mod.app
+    app.mount("/jira", jira_app)
+    logger.info("Jira pipeline API mounted at /jira")
 except Exception as e:
+    import traceback
     logger.error(f"Could not mount Jira pipeline API: {e}\n{traceback.format_exc()}")
 
 # --- Wiki Cache Helper Functions ---
