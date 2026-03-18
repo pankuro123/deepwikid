@@ -478,27 +478,21 @@ app.add_websocket_route("/ws/chat", handle_websocket_chat)
 try:
     import sys
     import os
-    import importlib.util
 
-    # Resolve paths absolutely so this works regardless of cwd
     current_dir = os.path.dirname(os.path.abspath(__file__))  # .../api
     root_dir = os.path.dirname(current_dir)                   # .../deepwiki-open
     jira_pipeline_dir = os.path.join(root_dir, 'jira_pipeline')
 
-    # Make sure jira_pipeline internal imports (e.g. `import pipeline`) work
+    # Add project root to sys.path so package-like imports work anywhere
+    if root_dir not in sys.path:
+        sys.path.insert(0, root_dir)
+        
+    # Also add jira_pipeline_dir so inner un-qualified imports (like `import pipeline`) work
     if jira_pipeline_dir not in sys.path:
         sys.path.insert(0, jira_pipeline_dir)
 
-    # Load service_api by file path — works regardless of working directory
-    _spec = importlib.util.spec_from_file_location(
-        "jira_pipeline.service_api",
-        os.path.join(jira_pipeline_dir, "service_api.py"),
-    )
-    _mod = importlib.util.module_from_spec(_spec)
-    sys.modules["jira_pipeline.service_api"] = _mod
-    _spec.loader.exec_module(_mod)
-
-    jira_app = _mod.app
+    # Standard import
+    from jira_pipeline.service_api import app as jira_app
     app.mount("/jira", jira_app)
     logger.info("Jira pipeline API mounted at /jira")
 except Exception as e:
