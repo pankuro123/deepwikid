@@ -120,7 +120,7 @@ def count_tokens(text: str, embedder_type: str = None, is_ollama_embedder: bool 
         # Rough approximation: 4 characters per token
         return len(text) // 4
 
-def download_repo(repo_url: str, local_path: str, repo_type: str = None, access_token: str = None) -> str:
+def download_repo(repo_url: str, local_path: str, repo_type: str = None, access_token: str = None, branch: str = None) -> str:
     """
     Downloads a Git repository (GitHub, GitLab, or Bitbucket) to a specified local path.
 
@@ -183,8 +183,12 @@ def download_repo(repo_url: str, local_path: str, repo_type: str = None, access_
         # We use repo_url in the log to avoid exposing the token in logs
         # Use custom SSL environment for corporate environments
         git_env = _get_git_ssl_env()
+        clone_cmd = ["git", "clone", "--depth=1", "--single-branch"]
+        if branch:
+            clone_cmd.extend(["-b", branch])
+        clone_cmd.extend([clone_url, local_path])
         result = subprocess.run(
-            ["git", "clone", "--depth=1", "--single-branch", clone_url, local_path],
+            clone_cmd,
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -509,7 +513,7 @@ def transform_documents_and_save_to_db(
     db.save_state(filepath=db_path)
     return db
 
-def get_github_file_content(repo_url: str, file_path: str, access_token: str = None) -> str:
+def get_github_file_content(repo_url: str, file_path: str, access_token: str = None, branch: str = None) -> str:
     """
     Retrieves the content of a file from a GitHub repository using the GitHub API.
     Supports both public GitHub (github.com) and GitHub Enterprise (custom domains).
@@ -551,6 +555,8 @@ def get_github_file_content(repo_url: str, file_path: str, access_token: str = N
         # Use GitHub API to get file content
         # The API endpoint for getting file content is: /repos/{owner}/{repo}/contents/{path}
         api_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
+        if branch:
+            api_url += f"?ref={branch}"
 
         # Fetch file content from GitHub API
         headers = {}
@@ -586,7 +592,7 @@ def get_github_file_content(repo_url: str, file_path: str, access_token: str = N
     except Exception as e:
         raise ValueError(f"Failed to get file content: {str(e)}")
 
-def get_gitlab_file_content(repo_url: str, file_path: str, access_token: str = None) -> str:
+def get_gitlab_file_content(repo_url: str, file_path: str, access_token: str = None, branch: str = None) -> str:
     """
     Retrieves the content of a file from a GitLab repository (cloud or self-hosted).
 
@@ -622,24 +628,25 @@ def get_gitlab_file_content(repo_url: str, file_path: str, access_token: str = N
         encoded_file_path = quote(file_path, safe='')
 
         # Try to get the default branch from the project info
-        default_branch = None
-        try:
-            project_info_url = f"{gitlab_domain}/api/v4/projects/{encoded_project_path}"
-            project_headers = {}
-            if access_token:
-                project_headers["PRIVATE-TOKEN"] = access_token
-            
-            project_response = requests.get(project_info_url, headers=project_headers, verify=_get_ssl_verify())
-            if project_response.status_code == 200:
-                project_data = project_response.json()
-                default_branch = project_data.get('default_branch', 'main')
-                logger.info(f"Found default branch: {default_branch}")
-            else:
-                logger.warning(f"Could not fetch project info, using 'main' as default branch")
+        default_branch = branch
+        if not default_branch:
+            try:
+                project_info_url = f"{gitlab_domain}/api/v4/projects/{encoded_project_path}"
+                project_headers = {}
+                if access_token:
+                    project_headers["PRIVATE-TOKEN"] = access_token
+                
+                project_response = requests.get(project_info_url, headers=project_headers, verify=_get_ssl_verify())
+                if project_response.status_code == 200:
+                    project_data = project_response.json()
+                    default_branch = project_data.get('default_branch', 'main')
+                    logger.info(f"Found default branch: {default_branch}")
+                else:
+                    logger.warning(f"Could not fetch project info, using 'main' as default branch")
+                    default_branch = 'main'
+            except Exception as e:
+                logger.warning(f"Error fetching project info: {e}, using 'main' as default branch")
                 default_branch = 'main'
-        except Exception as e:
-            logger.warning(f"Error fetching project info: {e}, using 'main' as default branch")
-            default_branch = 'main'
 
         api_url = f"{gitlab_domain}/api/v4/projects/{encoded_project_path}/repository/files/{encoded_file_path}/raw?ref={default_branch}"
         # Fetch file content from GitLab API
@@ -668,7 +675,7 @@ def get_gitlab_file_content(repo_url: str, file_path: str, access_token: str = N
     except Exception as e:
         raise ValueError(f"Failed to get file content: {str(e)}")
 
-def get_bitbucket_file_content(repo_url: str, file_path: str, access_token: str = None) -> str:
+def get_bitbucket_file_content(repo_url: str, file_path: str, access_token: str = None, branch: str = None) -> str:
     """
     Retrieves the content of a file from a Bitbucket repository using the Bitbucket API.
     Supports both Bitbucket Cloud (bitbucket.org) and Bitbucket Server/Data Center (self-hosted).
@@ -708,24 +715,25 @@ def get_bitbucket_file_content(repo_url: str, file_path: str, access_token: str 
             repo = path_parts[-1].replace(".git", "")
 
             # Try to get the default branch from the repository info
-            default_branch = None
-            try:
-                repo_info_url = f"https://api.bitbucket.org/2.0/repositories/{owner}/{repo}"
-                repo_headers = {}
-                if access_token:
-                    repo_headers["Authorization"] = f"Bearer {access_token}"
+            default_branch = branch
+            if not default_branch:
+                try:
+                    repo_info_url = f"https://api.bitbucket.org/2.0/repositories/{owner}/{repo}"
+                    repo_headers = {}
+                    if access_token:
+                        repo_headers["Authorization"] = f"Bearer {access_token}"
 
-                repo_response = requests.get(repo_info_url, headers=repo_headers, verify=ssl_verify)
-                if repo_response.status_code == 200:
-                    repo_data = repo_response.json()
-                    default_branch = repo_data.get('mainbranch', {}).get('name', 'main')
-                    logger.info(f"Found default branch: {default_branch}")
-                else:
-                    logger.warning("Could not fetch repository info, using 'main' as default branch")
+                    repo_response = requests.get(repo_info_url, headers=repo_headers, verify=ssl_verify)
+                    if repo_response.status_code == 200:
+                        repo_data = repo_response.json()
+                        default_branch = repo_data.get('mainbranch', {}).get('name', 'main')
+                        logger.info(f"Found default branch: {default_branch}")
+                    else:
+                        logger.warning("Could not fetch repository info, using 'main' as default branch")
+                        default_branch = 'main'
+                except Exception as e:
+                    logger.warning(f"Error fetching repository info: {e}, using 'main' as default branch")
                     default_branch = 'main'
-            except Exception as e:
-                logger.warning(f"Error fetching repository info: {e}, using 'main' as default branch")
-                default_branch = 'main'
 
             api_url = f"https://api.bitbucket.org/2.0/repositories/{owner}/{repo}/src/{default_branch}/{file_path}"
             headers = {}
@@ -755,36 +763,37 @@ def get_bitbucket_file_content(repo_url: str, file_path: str, access_token: str 
                 repo = path_parts[-1].replace(".git", "")
 
             # Try to get the default branch from the repository info
-            default_branch = None
-            try:
-                repo_info_url = f"{bitbucket_base}/rest/api/1.0/projects/{project}/repos/{repo}"
-                repo_headers = {}
-                if access_token:
-                    repo_headers["Authorization"] = f"Bearer {access_token}"
+            default_branch = branch
+            if not default_branch:
+                try:
+                    repo_info_url = f"{bitbucket_base}/rest/api/1.0/projects/{project}/repos/{repo}"
+                    repo_headers = {}
+                    if access_token:
+                        repo_headers["Authorization"] = f"Bearer {access_token}"
 
-                repo_response = requests.get(repo_info_url, headers=repo_headers, verify=ssl_verify)
-                if repo_response.status_code == 200:
-                    repo_data = repo_response.json()
-                    # Bitbucket Server stores default branch in 'defaultBranch' or via branches API
-                    default_branch = None
-                    if 'defaultBranch' in repo_data:
-                        default_branch = repo_data['defaultBranch']
-                    # Try the default branch endpoint
-                    if not default_branch:
-                        branch_url = f"{bitbucket_base}/rest/api/1.0/projects/{project}/repos/{repo}/default-branch"
-                        branch_response = requests.get(branch_url, headers=repo_headers, verify=ssl_verify)
-                        if branch_response.status_code == 200:
-                            branch_data = branch_response.json()
-                            default_branch = branch_data.get('displayId', branch_data.get('id', 'master'))
-                    if not default_branch:
-                        default_branch = 'master'  # Bitbucket Server often defaults to 'master'
-                    logger.info(f"Found default branch: {default_branch}")
-                else:
-                    logger.warning("Could not fetch repository info, using 'master' as default branch")
+                    repo_response = requests.get(repo_info_url, headers=repo_headers, verify=ssl_verify)
+                    if repo_response.status_code == 200:
+                        repo_data = repo_response.json()
+                        # Bitbucket Server stores default branch in 'defaultBranch' or via branches API
+                        default_branch = None
+                        if 'defaultBranch' in repo_data:
+                            default_branch = repo_data['defaultBranch']
+                        # Try the default branch endpoint
+                        if not default_branch:
+                            branch_url = f"{bitbucket_base}/rest/api/1.0/projects/{project}/repos/{repo}/default-branch"
+                            branch_response = requests.get(branch_url, headers=repo_headers, verify=ssl_verify)
+                            if branch_response.status_code == 200:
+                                branch_data = branch_response.json()
+                                default_branch = branch_data.get('displayId', branch_data.get('id', 'master'))
+                        if not default_branch:
+                            default_branch = 'master'  # Bitbucket Server often defaults to 'master'
+                        logger.info(f"Found default branch: {default_branch}")
+                    else:
+                        logger.warning("Could not fetch repository info, using 'master' as default branch")
+                        default_branch = 'master'
+                except Exception as e:
+                    logger.warning(f"Error fetching repository info: {e}, using 'master' as default branch")
                     default_branch = 'master'
-            except Exception as e:
-                logger.warning(f"Error fetching repository info: {e}, using 'master' as default branch")
-                default_branch = 'master'
 
             # Bitbucket Server raw file endpoint
             encoded_file_path = quote(file_path, safe='/')
@@ -818,7 +827,7 @@ def get_bitbucket_file_content(repo_url: str, file_path: str, access_token: str 
         raise ValueError(f"Failed to get file content: {str(e)}")
 
 
-def get_file_content(repo_url: str, file_path: str, repo_type: str = None, access_token: str = None) -> str:
+def get_file_content(repo_url: str, file_path: str, repo_type: str = None, access_token: str = None, branch: str = None) -> str:
     """
     Retrieves the content of a file from a Git repository (GitHub or GitLab).
 
@@ -835,11 +844,11 @@ def get_file_content(repo_url: str, file_path: str, repo_type: str = None, acces
         ValueError: If the file cannot be fetched or if the URL is not valid
     """
     if repo_type == "github":
-        return get_github_file_content(repo_url, file_path, access_token)
+        return get_github_file_content(repo_url, file_path, access_token, branch)
     elif repo_type == "gitlab":
-        return get_gitlab_file_content(repo_url, file_path, access_token)
+        return get_gitlab_file_content(repo_url, file_path, access_token, branch)
     elif repo_type == "bitbucket":
-        return get_bitbucket_file_content(repo_url, file_path, access_token)
+        return get_bitbucket_file_content(repo_url, file_path, access_token, branch)
     else:
         raise ValueError("Unsupported repository type. Only GitHub, GitLab, and Bitbucket are supported.")
 

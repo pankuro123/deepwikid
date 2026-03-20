@@ -68,6 +68,7 @@ class RepoInfo(BaseModel):
     token: Optional[str] = None
     localPath: Optional[str] = None
     repoUrl: Optional[str] = None
+    branch: Optional[str] = "main"
 
 
 class WikiSection(BaseModel):
@@ -504,9 +505,9 @@ except Exception as e:
 WIKI_CACHE_DIR = os.path.join(get_adalflow_default_root_path(), "wikicache")
 os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
 
-def get_wiki_cache_path(owner: str, repo: str, repo_type: str, language: str, report_type: str = "functional") -> str:
+def get_wiki_cache_path(owner: str, repo: str, repo_type: str, branch: str, language: str, report_type: str = "functional") -> str:
     """Generates the file path for a given wiki cache."""
-    filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}_{report_type}.json"
+    filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{branch}_{language}_{report_type}.json"
     return os.path.join(WIKI_CACHE_DIR, filename)
 
 def get_wiki_cache_path_legacy(owner: str, repo: str, repo_type: str, language: str) -> str:
@@ -514,9 +515,9 @@ def get_wiki_cache_path_legacy(owner: str, repo: str, repo_type: str, language: 
     filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}.json"
     return os.path.join(WIKI_CACHE_DIR, filename)
 
-async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str, report_type: str = "functional") -> Optional[WikiCacheData]:
+async def read_wiki_cache(owner: str, repo: str, repo_type: str, branch: str, language: str, report_type: str = "functional") -> Optional[WikiCacheData]:
     """Reads wiki cache data from the file system."""
-    cache_path = get_wiki_cache_path(owner, repo, repo_type, language, report_type)
+    cache_path = get_wiki_cache_path(owner, repo, repo_type, branch, language, report_type)
     
     # Fallback checking for legacy cached projects which were implicitly "functional"
     if not os.path.exists(cache_path) and report_type == "functional":
@@ -537,7 +538,7 @@ async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str, 
 async def save_wiki_cache(data: WikiCacheRequest) -> bool:
     """Saves wiki cache data to the file system."""
     report_type = data.report_type if data.report_type else "functional"
-    cache_path = get_wiki_cache_path(data.repo.owner, data.repo.repo, data.repo.type, data.language, report_type)
+    cache_path = get_wiki_cache_path(data.repo.owner, data.repo.repo, data.repo.type, data.repo.branch, data.language, report_type)
     logger.info(f"Attempting to save wiki cache. Path: {cache_path}")
     try:
         payload = WikiCacheData(
@@ -576,6 +577,7 @@ async def get_cached_wiki(
     owner: str = Query(..., description="Repository owner"),
     repo: str = Query(..., description="Repository name"),
     repo_type: str = Query(..., description="Repository type"),
+    branch: str = Query("main", description="Repository branch"),
     language: str = Query(..., description="Language"),
     report_type: str = Query("functional", description="Report Type (technical or functional)")
 ):
@@ -589,7 +591,7 @@ async def get_cached_wiki(
         if not supported_langs.__contains__(language):
             language = configs["lang_config"]["default"]
 
-        cached_data = await read_wiki_cache(owner, repo, repo_type, language, report_type)
+        cached_data = await read_wiki_cache(owner, repo, repo_type, branch, language, report_type)
         if cached_data:
             return cached_data
         else:
@@ -622,6 +624,7 @@ async def delete_wiki_cache(
     owner: str = Query(..., description="Repository owner"),
     repo: str = Query(..., description="Repository name"),
     repo_type: str = Query(..., description="Repository type"),
+    branch: str = Query("main", description="Repository branch"),
     language: str = Query(..., description="Language"),
     report_type: str = Query("functional", description="Report Type (technical or functional)"),
     authorization_code: Optional[str] = Query(None, description="Authorization code")
@@ -641,8 +644,8 @@ async def delete_wiki_cache(
             if not authorization_code or WIKI_AUTH_CODE != authorization_code:
                 raise HTTPException(status_code=401, detail="Authorization code is invalid")
 
-        logger.info(f"Attempting to delete wiki cache for {owner}/{repo} ({repo_type}), lang: {language}, report_type: {report_type}")
-        cache_path = get_wiki_cache_path(owner, repo, repo_type, language, report_type)
+        logger.info(f"Attempting to delete wiki cache for {owner}/{repo}:{branch} ({repo_type}), lang: {language}, report_type: {report_type}")
+        cache_path = get_wiki_cache_path(owner, repo, repo_type, branch, language, report_type)
 
         if not os.path.exists(cache_path) and report_type == "functional":
             legacy_path = get_wiki_cache_path_legacy(owner, repo, repo_type, language)

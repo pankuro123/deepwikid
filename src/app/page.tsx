@@ -94,6 +94,7 @@ export default function Home() {
           setModel(config.model || '');
           setIsCustomModel(config.isCustomModel || false);
           setCustomModel(config.customModel || '');
+          setBranch(config.branch || '');
           setSelectedPlatform(config.selectedPlatform || 'github');
           setExcludedDirs(config.excludedDirs || '');
           setExcludedFiles(config.excludedFiles || '');
@@ -140,6 +141,9 @@ export default function Home() {
   const [model, setModel] = useState<string>('');
   const [isCustomModel, setIsCustomModel] = useState<boolean>(false);
   const [customModel, setCustomModel] = useState<string>('');
+
+  // Branch Selection state
+  const [branch, setBranch] = useState<string>('');
 
   // Wiki type state - default to comprehensive view
   const [isComprehensiveView, setIsComprehensiveView] = useState<boolean>(true);
@@ -337,6 +341,7 @@ export default function Home() {
           model,
           isCustomModel,
           customModel,
+          branch,
           selectedPlatform,
           excludedDirs,
           excludedFiles,
@@ -405,6 +410,11 @@ export default function Home() {
     }
     if (includedFiles) {
       params.append('included_files', includedFiles);
+    }
+
+    // Add branch parameter
+    if (branch) {
+      params.append('branch', branch);
     }
 
     // Add language parameter
@@ -586,6 +596,8 @@ export default function Home() {
             setIsCustomModel={setIsCustomModel}
             customModel={customModel}
             setCustomModel={setCustomModel}
+            branch={branch}
+            setBranch={setBranch}
             selectedPlatform={selectedPlatform}
             setSelectedPlatform={setSelectedPlatform}
             accessToken={accessToken}

@@ -343,6 +343,7 @@ IMPORTANT FORMATTING RULES:
         return valid_documents
 
     def prepare_retriever(self, repo_url_or_path: str, type: str = "github", access_token: str = None,
+                      branch: str = None,
                       excluded_dirs: List[str] = None, excluded_files: List[str] = None,
                       included_dirs: List[str] = None, included_files: List[str] = None):
         """
@@ -363,6 +364,7 @@ IMPORTANT FORMATTING RULES:
             repo_url_or_path,
             type,
             access_token,
+            branch=branch,
             embedder_type=self.embedder_type,
             excluded_dirs=excluded_dirs,
             excluded_files=excluded_files,
