@@ -90,8 +90,8 @@ const wikiStyles = `
 `;
 
 // Helper function to generate cache key for localStorage
-const getCacheKey = (owner: string, repo: string, repoType: string, branch: string, language: string, isComprehensive: boolean = true, reportType: string = 'functional'): string => {
-  return `deepwiki_cache_${repoType}_${owner}_${repo}_${branch}_${language}_${isComprehensive ? 'comprehensive' : 'concise'}_${reportType}`;
+const getCacheKey = (owner: string, repo: string, repoType: string, language: string, isComprehensive: boolean = true, reportType: string = 'functional'): string => {
+  return `deepwiki_cache_${repoType}_${owner}_${repo}_${language}_${isComprehensive ? 'comprehensive' : 'concise'}_${reportType}`;
 };
 
 // Helper function to add tokens and other parameters to request body
@@ -211,8 +211,6 @@ export default function RepoWikiPage() {
         ? 'github'
         : searchParams.get('type') || 'github';
 
-  const branchParam = searchParams.get('branch') || 'main';
-
   // Import language context for translations
   const { messages } = useLanguage();
 
@@ -288,7 +286,7 @@ export default function RepoWikiPage() {
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   // Default branch state
-  const [defaultBranch, setDefaultBranch] = useState<string>(branchParam);
+  const [defaultBranch, setDefaultBranch] = useState<string>('main');
 
   // Helper function to generate proper repository file URLs
   const generateFileUrl = useCallback((filePath: string): string => {
@@ -443,7 +441,6 @@ export default function RepoWikiPage() {
         const requestBody: Record<string, any> = {
           repo_url: repoUrl,
           type: effectiveRepoInfo.type,
-          branch: defaultBranch,
           messages: [{
             role: 'user',
             content: promptContent
@@ -622,7 +619,6 @@ export default function RepoWikiPage() {
       const requestBody: Record<string, any> = {
         repo_url: repoUrl,
         type: effectiveRepoInfo.type,
-        branch: defaultBranch,
         messages: [{
           role: 'user',
           content: `Analyze this GitHub repository ${owner}/${repo} and create a wiki structure for it.
@@ -1972,7 +1968,7 @@ IMPORTANT:
     console.log('Refreshing wiki. Server cache will be overwritten upon new generation if not cleared.');
 
     // Clear the localStorage cache (if any remnants or if it was used before this change)
-    const localStorageCacheKey = getCacheKey(effectiveRepoInfo.owner, effectiveRepoInfo.repo, effectiveRepoInfo.type, defaultBranch, language, isComprehensiveView, reportType);
+    const localStorageCacheKey = getCacheKey(effectiveRepoInfo.owner, effectiveRepoInfo.repo, effectiveRepoInfo.type, language, isComprehensiveView, reportType);
     localStorage.removeItem(localStorageCacheKey);
 
     // Reset cache loaded flag
